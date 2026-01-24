@@ -1,0 +1,7 @@
+src/**
+scripts/**
+docs/**
+**/*.ts
+tsconfig.json
+*.vsix
+

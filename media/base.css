@@ -1,0 +1,74 @@
+:root {
+  --quench-font: var(--vscode-font-family);
+  --quench-font-size: var(--vscode-font-size);
+  --quench-bg: var(--vscode-editor-background);
+  --quench-fg: var(--vscode-editor-foreground);
+  --quench-border: var(--vscode-editorWidget-border);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--quench-bg);
+  color: var(--quench-fg);
+  font-family: var(--quench-font);
+  font-size: var(--quench-font-size);
+}
+
+#root {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+#editor {
+  flex: 1;
+  min-height: 0;
+}
+
+#banner {
+  border-top: 1px solid var(--quench-border);
+  padding: 8px 10px;
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+.qm-syntax-dim {
+  opacity: 0.35;
+}
+
+#preview {
+  position: fixed;
+  z-index: 1000;
+  max-width: 520px;
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid var(--quench-border);
+  background: var(--vscode-editorHoverWidget-background);
+  color: var(--vscode-editorHoverWidget-foreground);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+#preview .qm-preview-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+  opacity: 0.9;
+}
+
+#preview .qm-preview-body {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre;
+}
+
+.cm-editor {
+  height: 100%;
+}

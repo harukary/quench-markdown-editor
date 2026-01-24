@@ -1,0 +1,170 @@
+{
+  "name": "quench-markdown-editor",
+  "displayName": "Quench Markdown Editor",
+  "description": "Obsidian-like Live Preview Markdown editor for VS Code (Custom Editor).",
+  "version": "0.0.1",
+  "publisher": "inoueryo",
+  "license": "UNLICENSED",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onCustomEditor:quench.markdownEditor",
+    "onCommand:quench.reloadCss",
+    "onCommand:quench.rebuildWorkspaceIndex",
+    "onCommand:quench.insertMarkdownLink",
+    "onCommand:quench.insertLinkToHeading",
+    "onCommand:quench.insertImageFromFile",
+    "onCommand:quench.insertEmbed"
+  ],
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "quench.markdownEditor",
+        "displayName": "Quench Markdown Editor",
+        "selector": [
+          {
+            "filenamePattern": "*.md"
+          }
+        ],
+        "priority": "option"
+      }
+    ],
+    "commands": [
+      {
+        "command": "quench.reloadCss",
+        "title": "Quench: Reload CSS"
+      },
+      {
+        "command": "quench.rebuildWorkspaceIndex",
+        "title": "Quench: Rebuild Workspace Index"
+      },
+      {
+        "command": "quench.insertMarkdownLink",
+        "title": "Quench: Insert Markdown Link"
+      },
+      {
+        "command": "quench.insertLinkToHeading",
+        "title": "Quench: Insert Link to Heading"
+      },
+      {
+        "command": "quench.insertImageFromFile",
+        "title": "Quench: Insert Image from File"
+      },
+      {
+        "command": "quench.insertEmbed",
+        "title": "Quench: Insert Embed (Audio/Video/PDF)"
+      }
+    ],
+    "configuration": {
+      "title": "Quench",
+      "properties": {
+        "quench.css.files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "ワークスペースルート相対のCSSファイルパス一覧（例: styles/quench.css）。"
+        },
+        "quench.css.reloadOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "CSSファイル保存時に自動でWebviewへ再注入する。"
+        },
+        "quench.preview.syntaxVisibility": {
+          "type": "string",
+          "enum": [
+            "smart",
+            "always",
+            "minimal"
+          ],
+          "default": "smart",
+          "description": "Markdown記号（#,*,`など）の表示強調を制御する。"
+        },
+        "quench.links.previewOnHover": {
+          "type": "boolean",
+          "default": true,
+          "description": "リンクにホバーしたときにプレビュー（テキスト抜粋）を表示する。"
+        },
+        "quench.links.slugStyle": {
+          "type": "string",
+          "enum": [
+            "github"
+          ],
+          "default": "github",
+          "description": "見出しリンクのアンカー生成方式。現状はGitHub風のみ。"
+        },
+        "quench.attachments.location": {
+          "type": "string",
+          "enum": [
+            "workspaceRoot",
+            "specifiedFolder",
+            "sameFolder",
+            "subfolder"
+          ],
+          "default": "subfolder",
+          "description": "添付ファイルの保存先ポリシー。"
+        },
+        "quench.attachments.folderPath": {
+          "type": "string",
+          "default": "attachments",
+          "description": "specifiedFolder の保存先（ワークスペースルート相対）。"
+        },
+        "quench.attachments.subfolderName": {
+          "type": "string",
+          "default": "attachments",
+          "description": "subfolder のサブフォルダ名。"
+        },
+        "quench.attachments.naming": {
+          "type": "string",
+          "enum": [
+            "timestamp",
+            "noteNameTimestamp"
+          ],
+          "default": "timestamp",
+          "description": "添付ファイルの命名規則。"
+        },
+        "quench.security.allowExternalImages": {
+          "type": "boolean",
+          "default": false,
+          "description": "http(s)画像のロードを許可する（既定OFF）。"
+        },
+        "quench.security.allowHtmlEmbeds": {
+          "type": "boolean",
+          "default": false,
+          "description": "HTML埋め込み（audio/video/pdf等）を許可する（既定OFF）。"
+        },
+        "quench.security.allowIframes": {
+          "type": "boolean",
+          "default": false,
+          "description": "iframe埋め込みを許可する（allowHtmlEmbedsがONのときのみ意味がある）。"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build:webview": "node scripts/build-webview.mjs",
+    "compile": "tsc -p .",
+    "build": "npm run build:webview && npm run compile",
+    "watch": "tsc -w -p .",
+    "vscode:prepublish": "npm run build"
+  },
+  "devDependencies": {
+    "@codemirror/lang-markdown": "^6.2.5",
+    "@codemirror/state": "^6.5.2",
+    "@codemirror/view": "^6.38.1",
+    "@types/markdown-it": "^14.1.2",
+    "@types/node": "^22.10.0",
+    "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^3.7.1",
+    "esbuild": "^0.25.0",
+    "github-slugger": "^2.0.0",
+    "markdown-it": "^14.1.0",
+    "typescript": "^5.5.4"
+  }
+}
