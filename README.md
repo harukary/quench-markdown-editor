@@ -45,3 +45,9 @@ npm run build
 - `quench.css.reloadOnSave`: Auto re-inject CSS on save (helper; watcher is primary)
 
 See `docs/master.md` for more details.
+
+## Support
+
+If you find Quench helpful, you can support its development here:
+
+- Buy Me a Coffee: https://buymeacoffee.com/harukary7518
