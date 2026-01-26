@@ -45,7 +45,7 @@ export class CssService implements vscode.Disposable {
       if (!validated.ok) {
         this.panel.webview.postMessage({
           type: "ERROR",
-          message: `quench.css.files はワークスペース相対パスのみ対応です: ${relPathRaw} (${validated.reason})`
+          message: `quench.css.files only supports workspace-relative paths: ${relPathRaw} (${validated.reason})`
         } satisfies ExtensionToWebviewMessage);
         continue;
       }
@@ -87,7 +87,7 @@ export class CssService implements vscode.Disposable {
       const validated = validateWorkspaceRelativePath(relPathRaw);
       if (!validated.ok) {
         vscode.window.showErrorMessage(
-          `Quench: quench.css.files はワークスペース相対パスのみ対応です: ${relPathRaw} (${validated.reason})`
+          `Quench: quench.css.files only supports workspace-relative paths: ${relPathRaw} (${validated.reason})`
         );
         continue;
       }

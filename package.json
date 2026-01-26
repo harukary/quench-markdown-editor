@@ -3,8 +3,16 @@
   "displayName": "Quench Markdown Editor",
   "description": "Obsidian-like Live Preview Markdown editor for VS Code (Custom Editor).",
   "version": "0.0.1",
-  "publisher": "inoueryo",
+  "publisher": "harukary7518",
   "license": "UNLICENSED",
+  "keywords": [
+    "markdown",
+    "live preview",
+    "obsidian",
+    "gfm",
+    "codemirror",
+    "custom editor"
+  ],
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -77,7 +85,7 @@
           "type": "boolean",
           "default": true,
           "scope": "resource",
-          "description": "Quenchを開いたとき、.vscode/quench-theme.css が無ければ自動生成し、quench.css.files に追加する。"
+          "description": "When opening Quench, auto-create .vscode/quench-theme.css if missing, and add it to quench.css.files."
         },
         "quench.css.files": {
           "type": "array",
@@ -86,13 +94,13 @@
             "type": "string"
           },
           "default": [],
-          "description": "ワークスペースルート相対のCSSファイルパス一覧（例: styles/quench.css）。"
+          "description": "List of workspace-root-relative CSS file paths (e.g. styles/quench.css)."
         },
         "quench.css.reloadOnSave": {
           "type": "boolean",
           "default": true,
           "scope": "resource",
-          "description": "CSSファイル保存時に自動でWebviewへ再注入する。"
+          "description": "Re-inject CSS into the Webview automatically when CSS files are saved."
         },
         "quench.preview.syntaxVisibility": {
           "type": "string",
@@ -102,12 +110,12 @@
             "minimal"
           ],
           "default": "smart",
-          "description": "Markdown記号（#,*,`など）の表示強調を制御する。"
+          "description": "Controls how Markdown syntax characters (#, *, `, etc.) are displayed."
         },
         "quench.links.previewOnHover": {
           "type": "boolean",
           "default": true,
-          "description": "リンクにホバーしたときにプレビュー（テキスト抜粋）を表示する。"
+          "description": "Show a preview (text excerpt) when hovering a link."
         },
         "quench.links.slugStyle": {
           "type": "string",
@@ -115,7 +123,7 @@
             "github"
           ],
           "default": "github",
-          "description": "見出しリンクのアンカー生成方式。現状はGitHub風のみ。"
+          "description": "Heading anchor generation style for links. Currently GitHub-style only."
         },
         "quench.attachments.location": {
           "type": "string",
@@ -126,17 +134,17 @@
             "subfolder"
           ],
           "default": "subfolder",
-          "description": "添付ファイルの保存先ポリシー。"
+          "description": "Attachment location policy."
         },
         "quench.attachments.folderPath": {
           "type": "string",
           "default": "attachments",
-          "description": "specifiedFolder の保存先（ワークスペースルート相対）。"
+          "description": "Save folder for specifiedFolder (workspace-root-relative)."
         },
         "quench.attachments.subfolderName": {
           "type": "string",
           "default": "attachments",
-          "description": "subfolder のサブフォルダ名。"
+          "description": "Subfolder name for subfolder mode."
         },
         "quench.attachments.naming": {
           "type": "string",
@@ -145,22 +153,22 @@
             "noteNameTimestamp"
           ],
           "default": "timestamp",
-          "description": "添付ファイルの命名規則。"
+          "description": "Attachment file naming strategy."
         },
         "quench.security.allowExternalImages": {
           "type": "boolean",
           "default": false,
-          "description": "http(s)画像のロードを許可する（既定OFF）。"
+          "description": "Allow loading external http(s) images (default: off)."
         },
         "quench.security.allowHtmlEmbeds": {
           "type": "boolean",
           "default": false,
-          "description": "HTML埋め込み（audio/video/pdf等）を許可する（既定OFF）。"
+          "description": "Allow HTML embeds (audio/video/pdf, etc.) (default: off)."
         },
         "quench.security.allowIframes": {
           "type": "boolean",
           "default": false,
-          "description": "iframe埋め込みを許可する（allowHtmlEmbedsがONのときのみ意味がある）。"
+          "description": "Allow iframe embeds (only meaningful when allowHtmlEmbeds is enabled)."
         }
       }
     }

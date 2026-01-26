@@ -1,37 +1,47 @@
 # Quench Markdown Editor
 
-VSCode上でMarkdownを「Custom Editor（Webview）」として開き、Live Preview前提で編集するための拡張の土台です。
+An **Obsidian-like Live Preview** Markdown editor for VS Code, implemented as a **Custom Editor (Webview)**.
 
-## いま入っているもの（最小）
+This extension focuses on:
 
-- Custom Editor `quench.markdownEditor`（優先度: option）
-- Webview内のCodeMirror 6で編集
-- `TextDocument` へ `WorkspaceEdit` で反映（Undo/RedoはVSCode標準）
-- `quench.css.files` のCSSをWebviewへ注入 + 変更検知で再注入
-- コマンド `Quench: Reload CSS`（`quench.reloadCss`）
+- A clean, beautiful Live Preview editing experience inside VS Code
+- Workspace-scoped theming via `.vscode/quench-theme.css`
+- Image paste/drop → save as attachment → insert a relative path
+- GitHub-friendly Markdown defaults (GFM-first mindset)
 
-## 開発手順
+## Features (current)
 
-1) 依存を入れる
+- Custom Editor: `quench.markdownEditor` (priority: `option`)
+- Editing with CodeMirror 6 in a Webview
+- Writes back via `WorkspaceEdit` (Undo/Redo handled by VS Code)
+- Injects workspace CSS (`quench.css.files`) into the Webview, with optional reload-on-save
+- Commands:
+  - `Quench: Reload CSS`
+  - `Quench: Create Theme CSS (Workspace)`
+  - `Quench: Insert Image from File`
+  - `Quench: Resize Image (GitHub-compatible)`
+
+## Development
+
+1) Install dependencies
 
 ```bash
 npm install
 ```
 
-2) ビルドする（Webview bundle + Extension compile）
+2) Build (Webview bundle + Extension compile)
 
 ```bash
 npm run build
 ```
 
-3) VSCodeでこのフォルダを開き、`F5` で拡張ホストを起動する
+3) Open this folder in VS Code and press `F5` to launch the Extension Host
 
-4) `.md` を開いて、エディタ右上の「Open With...」から `Quench Markdown Editor` を選ぶ
+4) Open a `.md` file and select **Open With... → Quench Markdown Editor**
 
-## 設定
+## Settings
 
-- `quench.css.files`: ワークスペースルート相対のCSSパス配列
-- `quench.css.reloadOnSave`: 保存時に再注入（watcherがあるので補助的）
+- `quench.css.files`: List of workspace-relative CSS file paths
+- `quench.css.reloadOnSave`: Auto re-inject CSS on save (helper; watcher is primary)
 
-詳細は `docs/master.md` を参照。
-
+See `docs/master.md` for more details.

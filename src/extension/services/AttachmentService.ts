@@ -18,7 +18,7 @@ export type CreateAttachmentResult = {
 export async function createImageAttachment(input: CreateAttachmentInput): Promise<CreateAttachmentResult> {
   const settings = getQuenchSettings(input.fromDocumentUri);
   const folder = vscode.workspace.getWorkspaceFolder(input.fromDocumentUri);
-  if (!folder) throw new Error("ワークスペース外のドキュメントでは添付を保存できません");
+  if (!folder) throw new Error("Cannot save attachments for documents outside a workspace.");
 
   const noteDir = input.fromDocumentUri.with({ path: path.posix.dirname(input.fromDocumentUri.path) });
   const baseDir = resolveAttachmentBaseDir(folder.uri, noteDir, settings.attachments.location, settings.attachments);
@@ -47,14 +47,14 @@ function resolveAttachmentBaseDir(
       return workspaceRoot;
     case "specifiedFolder": {
       const rel = validateWorkspaceRelativePath(attachments.folderPath);
-      if (!rel.ok) throw new Error(`attachments.folderPath が不正です: ${rel.reason}`);
+      if (!rel.ok) throw new Error(`Invalid attachments.folderPath: ${rel.reason}`);
       return vscode.Uri.joinPath(workspaceRoot, rel.path);
     }
     case "sameFolder":
       return noteDir;
     case "subfolder": {
       const name = validateSinglePathSegment(attachments.subfolderName);
-      if (!name.ok) throw new Error(`attachments.subfolderName が不正です: ${name.reason}`);
+      if (!name.ok) throw new Error(`Invalid attachments.subfolderName: ${name.reason}`);
       return vscode.Uri.joinPath(noteDir, name.segment);
     }
   }
@@ -75,7 +75,7 @@ async function allocateUniqueUri(dir: vscode.Uri, filename: string): Promise<vsc
       return uri;
     }
   }
-  throw new Error("添付ファイル名の衝突が多すぎます（1000回試行）");
+  throw new Error("Too many attachment filename collisions (tried 1000 candidates).");
 }
 
 function createBaseName(fromDocumentUri: vscode.Uri, naming: "timestamp" | "noteNameTimestamp"): string {

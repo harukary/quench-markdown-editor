@@ -104,7 +104,7 @@ function applyDocPatch(message: { version: number; changes: TextChange[] }) {
   if (!view) throw new Error("Editor not initialized");
 
   if (pendingRequestIds.length > 0) {
-    showBanner("外部変更を受信したため再同期します（未確定の入力は破棄されます）");
+    showBanner("External change detected. Resyncing (pending input will be discarded).");
     pendingRequestIds.length = 0;
     post({ type: "REQUEST_DOC_RESYNC" });
     return;
@@ -125,11 +125,11 @@ function applyDocPatch(message: { version: number; changes: TextChange[] }) {
 function handleApplyEditResult(message: { requestId: string; applied: boolean; version: number; error?: string }) {
   const expected = pendingRequestIds[0];
   if (!expected) {
-    showBanner(`APPLY_EDIT_RESULT を受信しましたが pending がありません（requestId=${message.requestId}）`);
+    showBanner(`Received APPLY_EDIT_RESULT but there is no pending request (requestId=${message.requestId}).`);
     return;
   }
   if (expected !== message.requestId) {
-    showBanner(`APPLY_EDIT_RESULT の順序が不正です（expected=${expected}, got=${message.requestId}）`);
+    showBanner(`Invalid APPLY_EDIT_RESULT order (expected=${expected}, got=${message.requestId}).`);
     pendingRequestIds.length = 0;
     post({ type: "REQUEST_DOC_RESYNC" });
     return;
@@ -137,7 +137,7 @@ function handleApplyEditResult(message: { requestId: string; applied: boolean; v
   pendingRequestIds.shift();
 
   if (!message.applied) {
-    showBanner(`編集が適用されませんでした: ${message.error ?? "unknown"}`);
+    showBanner(`Edit was not applied: ${message.error ?? "unknown"}`);
     pendingRequestIds.length = 0;
     post({ type: "REQUEST_DOC_RESYNC" });
     return;
@@ -150,15 +150,15 @@ function handleApplyEditResult(message: { requestId: string; applied: boolean; v
 function handleDocResync(message: { text: string; version: number; reason: string }) {
   pendingRequestIds.length = 0;
   lastConfirmedVersion = message.version;
-  showBanner(`再同期しました（理由: ${message.reason}）。未確定の入力は破棄されました。`);
+  showBanner(`Resynced (reason: ${message.reason}). Pending input was discarded.`);
   initEditor(message.text);
 }
 
 function handleRequestSelection(requestId: string) {
   if (!view) throw new Error("Editor not initialized");
   if (pendingRequestIds.length > 0) {
-    // コマンド実行前提の情報なので、未確定編集がある場合は「正しい状態」を返せない。
-    showBanner("未確定の入力があります。少し待ってから再実行してください。");
+    // This is used by commands; with pending edits we cannot return a correct state.
+    showBanner("There are pending edits. Please wait a moment and try again.");
   }
 
   const sel = view.state.selection.main;
@@ -838,8 +838,8 @@ class ImageWidget extends WidgetType {
     if (this.opts.error) {
       wrap.classList.add("md-embed-image--error");
       const t = document.createElement("div");
-      const detail = this.opts.error === "not_found" ? "見つかりません" : this.opts.error;
-      t.textContent = `画像を読み込めません: ${detail}`;
+      const detail = this.opts.error === "not_found" ? "Not found" : this.opts.error;
+      t.textContent = `Failed to load image: ${detail}`;
       const p = document.createElement("div");
       p.textContent = this.opts.href;
       p.style.opacity = "0.8";
@@ -850,7 +850,7 @@ class ImageWidget extends WidgetType {
     }
     if (!this.opts.src) {
       const t = document.createElement("div");
-      t.textContent = "画像を読み込み中…";
+      t.textContent = "Loading image…";
       t.style.opacity = "0.7";
       t.style.fontSize = "12px";
       wrap.appendChild(t);
@@ -936,7 +936,7 @@ function attachDomHandlers(view: EditorView) {
     const bytes = new Uint8Array(await file.arrayBuffer());
     const sel = view.state.selection.main;
     const requestId = `att_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-    showBanner("画像を添付として保存中…");
+    showBanner("Saving image as an attachment…");
     post({
       type: "CREATE_ATTACHMENT",
       requestId,
@@ -967,7 +967,7 @@ function attachDomHandlers(view: EditorView) {
         e.preventDefault();
         const sel = view.state.selection.main;
         const requestId = `ref_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-        showBanner("参照リンクを挿入中…");
+        showBanner("Inserting image reference…");
         post({
           type: "INSERT_IMAGE_REFERENCE",
           requestId,
@@ -990,7 +990,7 @@ function attachDomHandlers(view: EditorView) {
     const bytes = new Uint8Array(await file.arrayBuffer());
     const sel = view.state.selection.main;
     const requestId = `att_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-    showBanner("画像を添付として保存中…");
+    showBanner("Saving image as an attachment…");
     post({
       type: "CREATE_ATTACHMENT",
       requestId,
@@ -1090,7 +1090,7 @@ const handleMessageEvent = (event: MessageEvent) => {
     }
     case "CREATE_ATTACHMENT_RESULT": {
       if (!msg.ok) {
-        showBanner(`画像添付に失敗しました: ${msg.error ?? "unknown"}`);
+        showBanner(`Failed to attach image: ${msg.error ?? "unknown"}`);
       } else {
         hideBanner();
       }

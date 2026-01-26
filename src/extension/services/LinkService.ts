@@ -15,7 +15,7 @@ export function splitHref(href: string): { pathPart: string; fragment?: string }
 
 export function computeRelativeMarkdownPath(fromDocumentUri: vscode.Uri, to: vscode.Uri): string {
   if (fromDocumentUri.scheme !== to.scheme || fromDocumentUri.authority !== to.authority) {
-    throw new Error("異なるscheme/authority間の相対パスは生成できません");
+    throw new Error("Cannot compute a relative path across different scheme/authority.");
   }
   const fromDir = path.posix.dirname(fromDocumentUri.path);
   let rel = path.posix.relative(fromDir, to.path);
@@ -48,7 +48,7 @@ export async function openLink(fromUri: vscode.Uri, href: string): Promise<void>
 
   const ext = path.posix.extname(resolved.targetUri.path).toLowerCase();
   if (ext && ext !== ".md") {
-    // 画像やPDFなどは VSCode の既定ビューアに任せる（TextDocumentとして開くと失敗する場合がある）
+    // Let VS Code handle images/PDFs via its default viewer (opening as TextDocument can fail).
     await vscode.commands.executeCommand("vscode.open", resolved.targetUri);
     return;
   }
@@ -78,10 +78,10 @@ export async function getPreviewText(fromUri: vscode.Uri, href: string): Promise
   const ext = path.posix.extname(resolved.targetUri.path).toLowerCase();
   const imageExts = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"]);
   if (imageExts.has(ext)) {
-    return { title: rel, text: "（画像ファイルのためテキストプレビューはありません）" };
+    return { title: rel, text: "(No text preview for image files)" };
   }
   if (ext && ext !== ".md") {
-    return { title: rel, text: `（テキストプレビュー未対応: ${ext}）` };
+    return { title: rel, text: `(Text preview not supported for: ${ext})` };
   }
 
   const doc = await vscode.workspace.openTextDocument(resolved.targetUri);

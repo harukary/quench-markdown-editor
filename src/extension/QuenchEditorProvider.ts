@@ -54,7 +54,7 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
   async createThemeCss(): Promise<void> {
     const folders = vscode.workspace.workspaceFolders ?? [];
     if (folders.length === 0) {
-      vscode.window.showErrorMessage("Quench: ワークスペースが開かれていません。");
+      vscode.window.showErrorMessage("Quench: No workspace folder is open.");
       return;
     }
 
@@ -63,7 +63,7 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
         ? folders[0]
         : await vscode.window.showQuickPick(
             folders.map((f) => ({ label: f.name, description: f.uri.fsPath, folder: f })),
-            { placeHolder: "テーマCSSを作成するワークスペースフォルダを選択" }
+            { placeHolder: "Select a workspace folder to create theme CSS" }
           ).then((p) => p?.folder);
     if (!folder) return;
 
@@ -75,7 +75,7 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
       await vscode.workspace.fs.stat(fileUri);
       const doc = await vscode.workspace.openTextDocument(fileUri);
       await vscode.window.showTextDocument(doc, { preview: false });
-      vscode.window.showInformationMessage(`Quench: 既に存在します: ${vscode.workspace.asRelativePath(fileUri)}`);
+      vscode.window.showInformationMessage(`Quench: Already exists: ${vscode.workspace.asRelativePath(fileUri)}`);
       return;
     } catch {
       // not exists -> create
@@ -93,18 +93,18 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
 
     const doc = await vscode.workspace.openTextDocument(fileUri);
     await vscode.window.showTextDocument(doc, { preview: false });
-    vscode.window.showInformationMessage(`Quench: テーマCSSを作成しました: ${vscode.workspace.asRelativePath(fileUri)}`);
+    vscode.window.showInformationMessage(`Quench: Theme CSS created: ${vscode.workspace.asRelativePath(fileUri)}`);
     await this.reloadCssForAllEditors();
   }
 
   private getThemeCssTemplate(): string {
     return `/* Quench Theme CSS (workspace)
 
-  生成先: .vscode/quench-theme.css
-  このファイルは Quench の見た目を調整するための “Simple Theme” 風テンプレです。
-  保存すると（quench.css.reloadOnSave がONなら）自動でQuenchに反映されます。
+  Path: .vscode/quench-theme.css
+  This file is a "Simple Theme" style template for Quench.
+  If quench.css.reloadOnSave is enabled, saving this file auto-reloads the Webview CSS.
 
-  反映対象: QuenchのWebview（#quench-user-css）
+  Target: Quench Webview (#quench-user-css)
 */
 
 :root {
@@ -129,7 +129,7 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
   --quench-code-comment: var(--quench-muted);
 }
 
-/* 例: 見出し色を変える */
+/* Example: customize heading color */
 /* .md-heading { color: var(--quench-accent); } */
 `;
   }
@@ -157,10 +157,10 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
       try {
         await vscode.workspace.fs.createDirectory(dirUri);
         await vscode.workspace.fs.writeFile(fileUri, Buffer.from(this.getThemeCssTemplate(), "utf8"));
-        vscode.window.showInformationMessage(`Quench: テーマCSSを自動生成しました: ${vscode.workspace.asRelativePath(fileUri)}`);
+        vscode.window.showInformationMessage(`Quench: Theme CSS auto-created: ${vscode.workspace.asRelativePath(fileUri)}`);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        vscode.window.showErrorMessage(`Quench: テーマCSSの自動生成に失敗しました: ${message}`);
+        vscode.window.showErrorMessage(`Quench: Failed to auto-create theme CSS: ${message}`);
         return;
       }
     }
@@ -177,7 +177,7 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
     const folder = vscode.workspace.getWorkspaceFolder(target.document.uri);
     const candidates = this.workspaceIndex.getMarkdownFiles(folder);
     if (candidates.length === 0) {
-      vscode.window.showErrorMessage("Quench: ワークスペース内に .md が見つかりません。");
+      vscode.window.showErrorMessage("Quench: No .md files found in the workspace.");
       return;
     }
 
@@ -189,7 +189,7 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
         uri: u
       }));
 
-    const picked = await vscode.window.showQuickPick(items, { placeHolder: "リンク先のMarkdownを選択" });
+    const picked = await vscode.window.showQuickPick(items, { placeHolder: "Select a Markdown file to link to" });
     if (!picked) return;
 
     const rel = computeRelativeMarkdownPath(target.document.uri, picked.uri);
@@ -210,7 +210,7 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
     const folder = vscode.workspace.getWorkspaceFolder(target.document.uri);
     const candidates = this.workspaceIndex.getMarkdownFiles(folder);
     if (candidates.length === 0) {
-      vscode.window.showErrorMessage("Quench: ワークスペース内に .md が見つかりません。");
+      vscode.window.showErrorMessage("Quench: No .md files found in the workspace.");
       return;
     }
 
@@ -219,13 +219,13 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
       uri: u
     }));
 
-    const pickedFile = await vscode.window.showQuickPick(fileItems, { placeHolder: "見出しリンク対象のMarkdownを選択" });
+    const pickedFile = await vscode.window.showQuickPick(fileItems, { placeHolder: "Select a Markdown file for heading links" });
     if (!pickedFile) return;
 
     const doc = await vscode.workspace.openTextDocument(pickedFile.uri);
     const headings = extractHeadings(doc.getText());
     if (headings.length === 0) {
-      vscode.window.showErrorMessage("Quench: 対象ファイルに見出しがありません。");
+      vscode.window.showErrorMessage("Quench: No headings found in the selected file.");
       return;
     }
 
@@ -235,7 +235,7 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
       heading: h
     }));
 
-    const pickedHeading = await vscode.window.showQuickPick(headingItems, { placeHolder: "リンクする見出しを選択" });
+    const pickedHeading = await vscode.window.showQuickPick(headingItems, { placeHolder: "Select a heading to link to" });
     if (!pickedHeading) return;
 
     const rel = computeRelativeMarkdownPath(target.document.uri, pickedFile.uri);
@@ -253,7 +253,7 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
 
     const picked = await vscode.window.showOpenDialog({
       canSelectMany: false,
-      openLabel: "画像を選択して添付として挿入",
+      openLabel: "Select an image to insert as an attachment",
       filters: {
         Images: ["png", "jpg", "jpeg", "gif", "webp", "svg"]
       }
@@ -273,7 +273,7 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      vscode.window.showErrorMessage(`Quench: 画像添付に失敗しました: ${message}`);
+      vscode.window.showErrorMessage(`Quench: Failed to attach image: ${message}`);
     }
   }
 
@@ -282,8 +282,8 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
     if (!target) return;
 
     const sizeRaw = await vscode.window.showInputBox({
-      prompt: "画像サイズ（GitHub互換）を入力",
-      placeHolder: "例: 200 / 200x120（空でサイズ削除）"
+      prompt: "Enter image size (GitHub-compatible)",
+      placeHolder: "e.g. 200 / 200x120 (empty to remove size)"
     });
     if (sizeRaw === undefined) return;
     const sizeText = sizeRaw.trim();
@@ -332,14 +332,14 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
       null;
 
     if (!hit) {
-      vscode.window.showErrorMessage("Quench: カーソル位置に画像が見つかりません。");
+      vscode.window.showErrorMessage("Quench: No image found at the cursor.");
       return;
     }
 
-    // 空ならサイズ削除（<img> の width/height を削除）
+    // Empty input removes size (deletes width/height from <img>)
     if (sizeText.length === 0) {
       if (hit.kind === "obs") {
-        // <img ...> から width/height を削除する
+        // Delete width/height from <img ...>
         const without = hit.raw
           .replace(/\swidth\s*=\s*(\"[^\"]*\"|'[^']*'|[^\s>]+)/gi, "")
           .replace(/\sheight\s*=\s*(\"[^\"]*\"|'[^']*'|[^\s>]+)/gi, "")
@@ -351,17 +351,17 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
 
     const sizeMatch = /^\s*(\d+)\s*(?:[x×]\s*(\d+)\s*)?$/.exec(sizeText);
     if (!sizeMatch) {
-      vscode.window.showErrorMessage("Quench: サイズは数字または 幅x高さ の形式で入力してください（例: 200 / 200x120）。");
+      vscode.window.showErrorMessage('Quench: Size must be a number or "WIDTHxHEIGHT" (e.g. 200 / 200x120).');
       return;
     }
     const w = Number(sizeMatch[1]);
     const h = sizeMatch[2] ? Number(sizeMatch[2]) : undefined;
     if (!Number.isFinite(w) || w <= 0 || (h != null && (!Number.isFinite(h) || h <= 0))) {
-      vscode.window.showErrorMessage("Quench: サイズが不正です。");
+      vscode.window.showErrorMessage("Quench: Invalid size.");
       return;
     }
     if (hit.kind === "md") {
-      // GitHub互換: Markdown画像 -> HTML img に変換して width/height を付与
+      // GitHub-friendly: convert Markdown image to HTML <img> with width/height
       const mdMatch = /^!\[([^\]]*)\]\(([^)]+)\)$/.exec(hit.raw.trim());
       const altRaw = mdMatch?.[1] ?? "";
       const src = hit.path;
@@ -372,11 +372,11 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
       return;
     }
 
-    // hit.kind === "obs": 既存の <img ...> を更新
+    // hit.kind === "obs": update existing <img ...>
     const srcMatch = /src\s*=\s*(\"([^\"]*)\"|'([^']*)'|([^\s>]+))/i.exec(hit.raw);
     const src = (srcMatch?.[2] ?? srcMatch?.[3] ?? srcMatch?.[4] ?? "").trim();
     if (!src) {
-      vscode.window.showErrorMessage("Quench: <img> に src が見つかりません。");
+      vscode.window.showErrorMessage("Quench: <img> tag has no src attribute.");
       return;
     }
     const altMatch = /alt\s*=\s*(\"([^\"]*)\"|'([^']*)'|([^\s>]+))/i.exec(hit.raw);
@@ -390,7 +390,7 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
   async insertEmbed(): Promise<void> {
     const settings = getQuenchSettings(this.lastActiveEditor?.document.uri);
     if (!settings.security.allowHtmlEmbeds) {
-      vscode.window.showErrorMessage("Quench: HTML埋め込みは無効です（quench.security.allowHtmlEmbeds をONにしてください）。");
+      vscode.window.showErrorMessage("Quench: HTML embeds are disabled. Enable quench.security.allowHtmlEmbeds.");
       return;
     }
 
@@ -402,10 +402,10 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
       { label: "video", snippet: '<video controls src=""></video>' },
       { label: "pdf (iframe)", snippet: '<iframe src=""></iframe>' }
     ];
-    const picked = await vscode.window.showQuickPick(items, { placeHolder: "挿入する埋め込みを選択" });
+    const picked = await vscode.window.showQuickPick(items, { placeHolder: "Select an embed snippet to insert" });
     if (!picked) return;
     if (picked.label.includes("iframe") && !settings.security.allowIframes) {
-      vscode.window.showErrorMessage("Quench: iframeは無効です（quench.security.allowIframes をONにしてください）。");
+      vscode.window.showErrorMessage("Quench: iframe embeds are disabled. Enable quench.security.allowIframes.");
       return;
     }
 
@@ -436,7 +436,7 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
     let gotAnyWebviewMessage = false;
     const bootTimeout = setTimeout(() => {
       if (gotAnyWebviewMessage) return;
-      vscode.window.showErrorMessage("Quench: Webview から応答がありません（起動に失敗している可能性があります）。");
+      vscode.window.showErrorMessage("Quench: No response from Webview (it may have failed to start).");
     }, 30000);
 
     editor.disposables.push(
@@ -455,7 +455,7 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
       })
     );
 
-    // HTMLを先に設定してwebviewをロード
+    // Set HTML first to start loading the Webview
     panel.webview.html = this.renderWebviewHtml(panel.webview);
     console.log("[quench] HTML set, sending INIT...");
 
@@ -502,7 +502,7 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
 
   private async handleWebviewMessage(editor: EditorInstance, msg: WebviewToExtensionMessage): Promise<void> {
     if (msg.type === "WEBVIEW_READY") {
-      // resolveCustomTextEditor() 側で待ち合わせるため、ここでは何もしない。
+      // No-op: resolveCustomTextEditor() waits for this.
       return;
     }
 
@@ -571,13 +571,13 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
     if (msg.type === "REQUEST_SELECTION") {
       editor.panel.webview.postMessage({
         type: "ERROR",
-        message: "Quench: REQUEST_SELECTION はExtension→Webviewのメッセージです（Webview→Extensionではありません）"
+        message: "Quench: REQUEST_SELECTION is an Extension → Webview message (not Webview → Extension)."
       } satisfies ExtensionToWebviewMessage);
       return;
     }
 
     if (msg.type === "SELECTION_RESULT") {
-      // requestSelectionFromWebview() の待受け用。ここでは何もしない。
+      // No-op: this is handled by requestSelectionFromWebview().
       return;
     }
 
@@ -586,7 +586,7 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
         await openLink(editor.document.uri, msg.href);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        vscode.window.showErrorMessage(`Quench: リンクを開けませんでした: ${message}`);
+        vscode.window.showErrorMessage(`Quench: Failed to open link: ${message}`);
       }
       return;
     }
@@ -605,9 +605,9 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
         editor.panel.webview.postMessage({
           type: "PREVIEW_RESULT",
           requestId: msg.requestId,
-          title: "プレビュー生成失敗",
-          text: message
-        } satisfies ExtensionToWebviewMessage);
+            title: "Preview failed",
+            text: message
+          } satisfies ExtensionToWebviewMessage);
       }
       return;
     }
@@ -695,7 +695,7 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
         } satisfies ExtensionToWebviewMessage);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        vscode.window.showErrorMessage(`Quench: 添付の保存に失敗しました: ${message}`);
+        vscode.window.showErrorMessage(`Quench: Failed to save attachment: ${message}`);
         editor.panel.webview.postMessage({
           type: "CREATE_ATTACHMENT_RESULT",
           requestId,
@@ -725,7 +725,7 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
         const docFolder = vscode.workspace.getWorkspaceFolder(editor.document.uri);
         const targetFolder = vscode.workspace.getWorkspaceFolder(targetUri);
         if (!docFolder || !targetFolder || docFolder.uri.toString() !== targetFolder.uri.toString()) {
-          throw new Error("ワークスペース内の同一ルートのファイルのみ参照リンクにできます");
+          throw new Error("Only files under the same workspace root can be referenced as relative links.");
         }
         const rel = computeRelativeMarkdownPath(editor.document.uri, targetUri);
         const markdown = `![](${rel})`;
@@ -913,7 +913,7 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
       }
     | null
   > {
-    // Custom Editor優先（Quench上でのコマンド利用を想定）
+    // Prefer the Custom Editor (commands are designed to work inside Quench)
     const active = this.lastActiveEditor;
     if (active) {
       const selection = await this.requestSelectionFromWebview(active);
@@ -924,7 +924,7 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
 
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
-      vscode.window.showErrorMessage("Quench: 対象エディタが見つかりません。");
+      vscode.window.showErrorMessage("Quench: No target editor found.");
       return null;
     }
 
@@ -951,7 +951,7 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
 
     if (response.type !== "SELECTION_RESULT") return null;
     if (editor.document.version !== response.baseVersion) {
-      vscode.window.showErrorMessage("Quench: 未確定の編集があるか、ドキュメントが更新されたため再同期します。");
+      vscode.window.showErrorMessage("Quench: The document changed or there are pending edits. Resyncing.");
       editor.pendingApplyQueue.length = 0;
       editor.panel.webview.postMessage({
         type: "DOC_RESYNC",
@@ -1005,6 +1005,6 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
     const edit = new vscode.WorkspaceEdit();
     edit.replace(document.uri, new vscode.Range(start, end), text);
     const ok = await vscode.workspace.applyEdit(edit);
-    if (!ok) throw new Error("WorkspaceEdit の適用に失敗しました");
+    if (!ok) throw new Error("Failed to apply WorkspaceEdit");
   }
 }
