@@ -2,6 +2,7 @@
   "name": "quench-markdown-editor",
   "displayName": "Quench Markdown Editor",
   "description": "Obsidian-like Live Preview Markdown editor for VS Code (Custom Editor).",
+  "icon": "resources/icon.png",
   "version": "0.0.1",
   "publisher": "harukary7518",
   "license": "UNLICENSED",
