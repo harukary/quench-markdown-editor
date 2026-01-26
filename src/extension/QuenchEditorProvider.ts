@@ -51,6 +51,125 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
     vscode.window.showInformationMessage("Quench: Workspace index rebuilt.");
   }
 
+  async createThemeCss(): Promise<void> {
+    const folders = vscode.workspace.workspaceFolders ?? [];
+    if (folders.length === 0) {
+      vscode.window.showErrorMessage("Quench: ワークスペースが開かれていません。");
+      return;
+    }
+
+    const folder =
+      folders.length === 1
+        ? folders[0]
+        : await vscode.window.showQuickPick(
+            folders.map((f) => ({ label: f.name, description: f.uri.fsPath, folder: f })),
+            { placeHolder: "テーマCSSを作成するワークスペースフォルダを選択" }
+          ).then((p) => p?.folder);
+    if (!folder) return;
+
+    const rel = ".vscode/quench-theme.css";
+    const fileUri = vscode.Uri.joinPath(folder.uri, rel);
+    const dirUri = vscode.Uri.joinPath(folder.uri, ".vscode");
+
+    try {
+      await vscode.workspace.fs.stat(fileUri);
+      const doc = await vscode.workspace.openTextDocument(fileUri);
+      await vscode.window.showTextDocument(doc, { preview: false });
+      vscode.window.showInformationMessage(`Quench: 既に存在します: ${vscode.workspace.asRelativePath(fileUri)}`);
+      return;
+    } catch {
+      // not exists -> create
+    }
+
+    const template = this.getThemeCssTemplate();
+
+    await vscode.workspace.fs.createDirectory(dirUri);
+    await vscode.workspace.fs.writeFile(fileUri, Buffer.from(template, "utf8"));
+
+    const cfg = vscode.workspace.getConfiguration("quench", folder.uri);
+    const current = cfg.get<string[]>("css.files", []);
+    const next = current.includes(rel) ? current : [...current, rel];
+    await cfg.update("css.files", next, vscode.ConfigurationTarget.WorkspaceFolder);
+
+    const doc = await vscode.workspace.openTextDocument(fileUri);
+    await vscode.window.showTextDocument(doc, { preview: false });
+    vscode.window.showInformationMessage(`Quench: テーマCSSを作成しました: ${vscode.workspace.asRelativePath(fileUri)}`);
+    await this.reloadCssForAllEditors();
+  }
+
+  private getThemeCssTemplate(): string {
+    return `/* Quench Theme CSS (workspace)
+
+  生成先: .vscode/quench-theme.css
+  このファイルは Quench の見た目を調整するための “Simple Theme” 風テンプレです。
+  保存すると（quench.css.reloadOnSave がONなら）自動でQuenchに反映されます。
+
+  反映対象: QuenchのWebview（#quench-user-css）
+*/
+
+:root {
+  /* Accent (Obsidian-ish purple) */
+  --quench-accent: #7c3aed;
+
+  /* Links */
+  --quench-link: color-mix(in srgb, var(--quench-accent) 82%, #fff 18%);
+  --quench-link-active: color-mix(in srgb, var(--quench-accent) 62%, #fff 38%);
+
+  /* Muted/syntax (dim markdown markers) */
+  --quench-muted: color-mix(in srgb, var(--vscode-editor-foreground) 70%, var(--vscode-editor-background) 30%);
+
+  /* Cursor (theme follow; set to #fff to force white) */
+  --quench-cursor: var(--vscode-editorCursor-foreground);
+
+  /* Inline code + code tokens */
+  --quench-code-fg: color-mix(in srgb, var(--vscode-editor-foreground) 92%, #fff 8%);
+  --quench-code-keyword: color-mix(in srgb, var(--quench-accent) 70%, #fff 30%);
+  --quench-code-string: color-mix(in srgb, #22c55e 70%, #fff 30%);
+  --quench-code-number: color-mix(in srgb, #f59e0b 70%, #fff 30%);
+  --quench-code-comment: var(--quench-muted);
+}
+
+/* 例: 見出し色を変える */
+/* .md-heading { color: var(--quench-accent); } */
+`;
+  }
+
+  private async ensureThemeCss(folder: vscode.WorkspaceFolder): Promise<void> {
+    const cfg = vscode.workspace.getConfiguration("quench", folder.uri);
+    const autoCreate = cfg.get<boolean>("theme.autoCreateCss", true);
+    if (!autoCreate) return;
+
+    const rel = ".vscode/quench-theme.css";
+    const fileUri = vscode.Uri.joinPath(folder.uri, rel);
+    const dirUri = vscode.Uri.joinPath(folder.uri, ".vscode");
+
+    const current = cfg.get<string[]>("css.files", []);
+    const needsConfigUpdate = !current.includes(rel);
+
+    let exists = true;
+    try {
+      await vscode.workspace.fs.stat(fileUri);
+    } catch {
+      exists = false;
+    }
+
+    if (!exists) {
+      try {
+        await vscode.workspace.fs.createDirectory(dirUri);
+        await vscode.workspace.fs.writeFile(fileUri, Buffer.from(this.getThemeCssTemplate(), "utf8"));
+        vscode.window.showInformationMessage(`Quench: テーマCSSを自動生成しました: ${vscode.workspace.asRelativePath(fileUri)}`);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        vscode.window.showErrorMessage(`Quench: テーマCSSの自動生成に失敗しました: ${message}`);
+        return;
+      }
+    }
+
+    if (needsConfigUpdate) {
+      await cfg.update("css.files", [...current, rel], vscode.ConfigurationTarget.WorkspaceFolder);
+    }
+  }
+
   async insertMarkdownLink(): Promise<void> {
     const target = await this.getCommandTarget();
     if (!target) return;
@@ -158,8 +277,118 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
     }
   }
 
+  async resizeImage(): Promise<void> {
+    const target = await this.getCommandTarget();
+    if (!target) return;
+
+    const sizeRaw = await vscode.window.showInputBox({
+      prompt: "画像サイズ（GitHub互換）を入力",
+      placeHolder: "例: 200 / 200x120（空でサイズ削除）"
+    });
+    if (sizeRaw === undefined) return;
+    const sizeText = sizeRaw.trim();
+
+    const selFrom = target.selection.selectionFrom;
+    const selTo = target.selection.selectionTo;
+    const selectionOverlaps = (from: number, to: number) => !(to <= selFrom || from >= selTo);
+    const cursorOffset = selFrom;
+
+    const pos = target.document.positionAt(cursorOffset);
+    const line = target.document.lineAt(pos.line);
+    const lineStartOffset = target.document.offsetAt(line.range.start);
+    const text = line.text;
+
+    type Match = { from: number; to: number; kind: "md" | "obs"; path: string; raw: string };
+    const matches: Match[] = [];
+
+    for (const m of text.matchAll(/!\[([^\]]*)\]\(([^)]+)\)/g)) {
+      const start = m.index ?? -1;
+      if (start < 0) continue;
+      const raw = m[0];
+      matches.push({
+        kind: "md",
+        raw,
+        path: (m[2] ?? "").trim(),
+        from: lineStartOffset + start,
+        to: lineStartOffset + start + raw.length
+      });
+    }
+    for (const m of text.matchAll(/<img\b[^>]*>/gi)) {
+      const start = m.index ?? -1;
+      if (start < 0) continue;
+      const raw = m[0];
+      matches.push({
+        kind: "obs",
+        raw,
+        path: raw,
+        from: lineStartOffset + start,
+        to: lineStartOffset + start + raw.length
+      });
+    }
+
+    const hit =
+      matches.find((x) => selectionOverlaps(x.from, x.to)) ??
+      matches.find((x) => cursorOffset >= x.from && cursorOffset <= x.to) ??
+      null;
+
+    if (!hit) {
+      vscode.window.showErrorMessage("Quench: カーソル位置に画像が見つかりません。");
+      return;
+    }
+
+    // 空ならサイズ削除（<img> の width/height を削除）
+    if (sizeText.length === 0) {
+      if (hit.kind === "obs") {
+        // <img ...> から width/height を削除する
+        const without = hit.raw
+          .replace(/\swidth\s*=\s*(\"[^\"]*\"|'[^']*'|[^\s>]+)/gi, "")
+          .replace(/\sheight\s*=\s*(\"[^\"]*\"|'[^']*'|[^\s>]+)/gi, "")
+          .replace(/\s{2,}/g, " ");
+        await this.applyReplaceByOffsets(target.document, hit.from, hit.to, without, { ifSelectionNotEmpty: "replace" });
+      }
+      return;
+    }
+
+    const sizeMatch = /^\s*(\d+)\s*(?:[x×]\s*(\d+)\s*)?$/.exec(sizeText);
+    if (!sizeMatch) {
+      vscode.window.showErrorMessage("Quench: サイズは数字または 幅x高さ の形式で入力してください（例: 200 / 200x120）。");
+      return;
+    }
+    const w = Number(sizeMatch[1]);
+    const h = sizeMatch[2] ? Number(sizeMatch[2]) : undefined;
+    if (!Number.isFinite(w) || w <= 0 || (h != null && (!Number.isFinite(h) || h <= 0))) {
+      vscode.window.showErrorMessage("Quench: サイズが不正です。");
+      return;
+    }
+    if (hit.kind === "md") {
+      // GitHub互換: Markdown画像 -> HTML img に変換して width/height を付与
+      const mdMatch = /^!\[([^\]]*)\]\(([^)]+)\)$/.exec(hit.raw.trim());
+      const altRaw = mdMatch?.[1] ?? "";
+      const src = hit.path;
+      const attrs = h != null ? `width="${w}" height="${h}"` : `width="${w}"`;
+      const altAttr = altRaw.trim().length > 0 ? ` alt="${altRaw.replace(/\"/g, "&quot;")}"` : "";
+      const next = `<img src="${src}"${altAttr} ${attrs} />`;
+      await this.applyReplaceByOffsets(target.document, hit.from, hit.to, next, { ifSelectionNotEmpty: "replace" });
+      return;
+    }
+
+    // hit.kind === "obs": 既存の <img ...> を更新
+    const srcMatch = /src\s*=\s*(\"([^\"]*)\"|'([^']*)'|([^\s>]+))/i.exec(hit.raw);
+    const src = (srcMatch?.[2] ?? srcMatch?.[3] ?? srcMatch?.[4] ?? "").trim();
+    if (!src) {
+      vscode.window.showErrorMessage("Quench: <img> に src が見つかりません。");
+      return;
+    }
+    const altMatch = /alt\s*=\s*(\"([^\"]*)\"|'([^']*)'|([^\s>]+))/i.exec(hit.raw);
+    const alt = (altMatch?.[2] ?? altMatch?.[3] ?? altMatch?.[4] ?? "").trim();
+    const attrs = h != null ? `width="${w}" height="${h}"` : `width="${w}"`;
+    const altAttr = alt.length > 0 ? ` alt="${alt.replace(/\"/g, "&quot;")}"` : "";
+    const next = `<img src="${src}"${altAttr} ${attrs} />`;
+    await this.applyReplaceByOffsets(target.document, hit.from, hit.to, next, { ifSelectionNotEmpty: "replace" });
+  }
+
   async insertEmbed(): Promise<void> {
-    const settings = getQuenchSettings();
+    const settings = getQuenchSettings(this.lastActiveEditor?.document.uri);
     if (!settings.security.allowHtmlEmbeds) {
       vscode.window.showErrorMessage("Quench: HTML埋め込みは無効です（quench.security.allowHtmlEmbeds をONにしてください）。");
       return;
@@ -190,6 +419,11 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
     panel: vscode.WebviewPanel,
     _token: vscode.CancellationToken
   ): Promise<void> {
+    const folder = vscode.workspace.getWorkspaceFolder(document.uri);
+    if (folder) {
+      await this.ensureThemeCss(folder);
+    }
+
     panel.webview.options = {
       enableScripts: true,
       localResourceRoots: [this.context.extensionUri, ...(vscode.workspace.workspaceFolders ?? []).map((f) => f.uri)]
@@ -199,9 +433,17 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
     const editor: EditorInstance = { panel, document, cssService, disposables: [], pendingApplyQueue: [] };
     this.trackEditor(editor);
 
+    let gotAnyWebviewMessage = false;
+    const bootTimeout = setTimeout(() => {
+      if (gotAnyWebviewMessage) return;
+      vscode.window.showErrorMessage("Quench: Webview から応答がありません（起動に失敗している可能性があります）。");
+    }, 30000);
+
     editor.disposables.push(
       panel.webview.onDidReceiveMessage(async (raw) => {
         try {
+          gotAnyWebviewMessage = true;
+          clearTimeout(bootTimeout);
           const msg = assertWebviewToExtensionMessage(raw);
           await this.handleWebviewMessage(editor, msg);
         } catch (err) {
@@ -213,27 +455,11 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
       })
     );
 
-    // webview側の message listener 準備前に INIT を送ると初期化に失敗して「開かない」ように見えるため、
-    // 明示的なハンドシェイクを挟む。
-    try {
-      await this.waitForWebviewMessage(
-        panel.webview,
-        (m): m is WebviewToExtensionMessage => typeof m === "object" && m !== null && (m as any).type === "WEBVIEW_READY",
-        async () => {
-          panel.webview.html = this.renderWebviewHtml(panel.webview);
-        },
-        { timeoutMs: 15000 }
-      );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      vscode.window.showErrorMessage(`Quench: Webview の起動待ちで失敗しました: ${message}`);
-      editor.disposables.forEach((d) => d.dispose());
-      cssService.dispose();
-      this.untrackEditor(editor);
-      throw err;
-    }
+    // HTMLを先に設定してwebviewをロード
+    panel.webview.html = this.renderWebviewHtml(panel.webview);
+    console.log("[quench] HTML set, sending INIT...");
 
-    const settings = getQuenchSettings();
+    const settings = getQuenchSettings(document.uri);
     const cssText = await cssService.readAllCssText();
     panel.webview.postMessage({
       type: "INIT",
@@ -260,6 +486,7 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
 
     editor.disposables.push(
       panel.onDidDispose(() => {
+        clearTimeout(bootTimeout);
         editor.disposables.forEach((d) => d.dispose());
         cssService.dispose();
         this.untrackEditor(editor);
@@ -276,6 +503,12 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
   private async handleWebviewMessage(editor: EditorInstance, msg: WebviewToExtensionMessage): Promise<void> {
     if (msg.type === "WEBVIEW_READY") {
       // resolveCustomTextEditor() 側で待ち合わせるため、ここでは何もしない。
+      return;
+    }
+
+    if (msg.type === "BOOT_ERROR") {
+      vscode.window.showErrorMessage(`Quench: Webview boot error: ${msg.message}`);
+      console.error("[quench] Webview boot error:", msg.message, msg.detail ?? "");
       return;
     }
 
@@ -380,7 +613,7 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
     }
 
     if (msg.type === "REQUEST_RESOURCE_URI") {
-      const settings = getQuenchSettings();
+      const settings = getQuenchSettings(editor.document.uri);
       if (msg.kind === "image") {
         const requestId = msg.requestId;
         try {
@@ -407,6 +640,17 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
           const { pathPart } = msg.href.includes("#") ? { pathPart: msg.href.split("#")[0] } : { pathPart: msg.href };
           const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(from.path), pathPart));
           const target = from.with({ path: resolved });
+          try {
+            await vscode.workspace.fs.stat(target);
+          } catch {
+            editor.panel.webview.postMessage({
+              type: "RESOURCE_URI_RESULT",
+              requestId,
+              ok: false,
+              error: "not_found"
+            } satisfies ExtensionToWebviewMessage);
+            return;
+          }
           const uri = editor.panel.webview.asWebviewUri(target).toString();
           editor.panel.webview.postMessage({
             type: "RESOURCE_URI_RESULT",
@@ -542,29 +786,21 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
 
   private renderWebviewHtml(webview: vscode.Webview): string {
     const nonce = this.getNonce();
-    const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, "media", "webview.js"));
-    const baseCssUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, "media", "base.css"));
-
-    const settings = getQuenchSettings();
-    const imgSrc = settings.security.allowExternalImages ? `${webview.cspSource} https: http:` : `${webview.cspSource}`;
-    const frameSrc = settings.security.allowIframes ? "https: http:" : "'none'";
-
-    const csp = [
-      "default-src 'none'",
-      `img-src ${imgSrc}`,
-      `style-src ${webview.cspSource} 'nonce-${nonce}'`,
-      `script-src 'nonce-${nonce}'`,
-      `frame-src ${frameSrc}`
-    ].join("; ");
+    const cacheBust = nonce;
+    const scriptUri = `${webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, "media", "webview.js"))}?v=${cacheBust}`;
+    const baseCssUri = `${webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, "media", "base.css"))}?v=${cacheBust}`;
 
     return `<!doctype html>
 <html lang="ja">
   <head>
     <meta charset="UTF-8" />
-    <meta http-equiv="Content-Security-Policy" content="${csp}" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; img-src ${webview.cspSource} https: data:; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; connect-src ${webview.cspSource}; script-src 'nonce-${nonce}';"
+    />
     <link rel="stylesheet" href="${baseCssUri}" />
-    <style nonce="${nonce}" id="quench-user-css"></style>
+    <style id="quench-user-css"></style>
     <title>Quench</title>
   </head>
   <body>
@@ -573,7 +809,71 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
       <div id="preview" hidden></div>
       <div id="banner" hidden></div>
     </div>
-    <script nonce="${nonce}" src="${scriptUri}"></script>
+    <script nonce="${nonce}">
+      (function () {
+        const vscode = acquireVsCodeApi();
+        window.__quench_vscode = vscode;
+        const queue = [];
+        let handler = null;
+
+        function post(msg) {
+          try {
+            vscode.postMessage(msg);
+          } catch (e) {
+            // no-op
+          }
+        }
+
+        window.__quench_boot = {
+          setHandler(nextHandler) {
+            handler = nextHandler;
+            while (queue.length > 0) {
+              const ev = queue.shift();
+              try {
+                handler(ev);
+              } catch (e) {
+                post({
+                  type: "BOOT_ERROR",
+                  message: e instanceof Error ? e.message : String(e),
+                  detail: e instanceof Error ? e.stack : undefined
+                });
+              }
+            }
+          }
+        };
+
+        window.addEventListener("message", (ev) => {
+          if (handler) handler(ev);
+          else queue.push(ev);
+        });
+
+        window.addEventListener("error", (ev) => {
+          post({
+            type: "BOOT_ERROR",
+            message: ev && ev.message ? String(ev.message) : "window.error",
+            detail: ev && ev.error && ev.error.stack ? String(ev.error.stack) : undefined
+          });
+        });
+        window.addEventListener("unhandledrejection", (ev) => {
+          const reason = ev && ev.reason ? ev.reason : "unhandledrejection";
+          post({
+            type: "BOOT_ERROR",
+            message: reason instanceof Error ? reason.message : String(reason),
+            detail: reason instanceof Error ? reason.stack : undefined
+          });
+        });
+
+        post({ type: "WEBVIEW_READY" });
+
+        const script = document.createElement("script");
+        script.src = "${scriptUri}";
+        script.nonce = "${nonce}";
+        script.addEventListener("error", () => {
+          post({ type: "BOOT_ERROR", message: "Failed to load webview.js", detail: script.src });
+        });
+        document.body.appendChild(script);
+      })();
+    </script>
   </body>
 </html>`;
   }

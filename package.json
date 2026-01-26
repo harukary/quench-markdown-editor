@@ -15,10 +15,12 @@
   "activationEvents": [
     "onCustomEditor:quench.markdownEditor",
     "onCommand:quench.reloadCss",
+    "onCommand:quench.createThemeCss",
     "onCommand:quench.rebuildWorkspaceIndex",
     "onCommand:quench.insertMarkdownLink",
     "onCommand:quench.insertLinkToHeading",
     "onCommand:quench.insertImageFromFile",
+    "onCommand:quench.resizeImage",
     "onCommand:quench.insertEmbed"
   ],
   "contributes": {
@@ -40,6 +42,10 @@
         "title": "Quench: Reload CSS"
       },
       {
+        "command": "quench.createThemeCss",
+        "title": "Quench: Create Theme CSS (Workspace)"
+      },
+      {
         "command": "quench.rebuildWorkspaceIndex",
         "title": "Quench: Rebuild Workspace Index"
       },
@@ -56,6 +62,10 @@
         "title": "Quench: Insert Image from File"
       },
       {
+        "command": "quench.resizeImage",
+        "title": "Quench: Resize Image (GitHub-compatible)"
+      },
+      {
         "command": "quench.insertEmbed",
         "title": "Quench: Insert Embed (Audio/Video/PDF)"
       }
@@ -63,8 +73,15 @@
     "configuration": {
       "title": "Quench",
       "properties": {
+        "quench.theme.autoCreateCss": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "description": "Quenchを開いたとき、.vscode/quench-theme.css が無ければ自動生成し、quench.css.files に追加する。"
+        },
         "quench.css.files": {
           "type": "array",
+          "scope": "resource",
           "items": {
             "type": "string"
           },
@@ -74,6 +91,7 @@
         "quench.css.reloadOnSave": {
           "type": "boolean",
           "default": true,
+          "scope": "resource",
           "description": "CSSファイル保存時に自動でWebviewへ再注入する。"
         },
         "quench.preview.syntaxVisibility": {
@@ -154,8 +172,14 @@
     "watch": "tsc -w -p .",
     "vscode:prepublish": "npm run build"
   },
+  "dependencies": {
+    "github-slugger": "^2.0.0",
+    "markdown-it": "^14.1.0"
+  },
   "devDependencies": {
     "@codemirror/lang-markdown": "^6.2.5",
+    "@codemirror/language": "^6.12.1",
+    "@codemirror/language-data": "^6.5.2",
     "@codemirror/state": "^6.5.2",
     "@codemirror/view": "^6.38.1",
     "@types/markdown-it": "^14.1.2",
@@ -163,8 +187,6 @@
     "@types/vscode": "^1.90.0",
     "@vscode/vsce": "^3.7.1",
     "esbuild": "^0.25.0",
-    "github-slugger": "^2.0.0",
-    "markdown-it": "^14.1.0",
     "typescript": "^5.5.4"
   }
 }

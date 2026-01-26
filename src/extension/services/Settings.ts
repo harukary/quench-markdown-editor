@@ -1,8 +1,8 @@
 import * as vscode from "vscode";
 import { QuenchSettings } from "../../shared/protocol";
 
-export function getQuenchSettings(): QuenchSettings {
-  const quench = vscode.workspace.getConfiguration("quench");
+export function getQuenchSettings(resource?: vscode.Uri): QuenchSettings {
+  const quench = vscode.workspace.getConfiguration("quench", resource);
   const css = quench.get<unknown>("css");
   // VSCodeは設定をフラットキーでも取得できるが、型を明確にするため個別に読む。
   const cssFiles = quench.get<string[]>("css.files", []);
@@ -47,4 +47,3 @@ export function getQuenchSettings(): QuenchSettings {
     }
   };
 }
-

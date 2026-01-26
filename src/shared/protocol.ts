@@ -88,6 +88,11 @@ export type WebviewToExtensionMessage =
       type: "WEBVIEW_READY";
     }
   | {
+      type: "BOOT_ERROR";
+      message: string;
+      detail?: string;
+    }
+  | {
       type: "APPLY_EDIT";
       requestId: string;
       baseVersion: number;
@@ -177,6 +182,12 @@ export function assertWebviewToExtensionMessage(value: unknown): WebviewToExtens
 
   if (value.type === "WEBVIEW_READY") {
     return { type: "WEBVIEW_READY" };
+  }
+
+  if (value.type === "BOOT_ERROR") {
+    assertString(value.message, "BOOT_ERROR.message");
+    if (typeof value.detail !== "undefined") assertString(value.detail, "BOOT_ERROR.detail");
+    return { type: "BOOT_ERROR", message: value.message, detail: value.detail };
   }
 
   if (value.type === "REQUEST_DOC_RESYNC") {

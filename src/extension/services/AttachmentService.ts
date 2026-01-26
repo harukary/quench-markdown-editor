@@ -16,7 +16,7 @@ export type CreateAttachmentResult = {
 };
 
 export async function createImageAttachment(input: CreateAttachmentInput): Promise<CreateAttachmentResult> {
-  const settings = getQuenchSettings();
+  const settings = getQuenchSettings(input.fromDocumentUri);
   const folder = vscode.workspace.getWorkspaceFolder(input.fromDocumentUri);
   if (!folder) throw new Error("ワークスペース外のドキュメントでは添付を保存できません");
 

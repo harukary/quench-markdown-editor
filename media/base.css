@@ -4,6 +4,19 @@
   --quench-bg: var(--vscode-editor-background);
   --quench-fg: var(--vscode-editor-foreground);
   --quench-border: var(--vscode-editorWidget-border);
+  --quench-cursor: var(--vscode-editorCursor-foreground);
+  --quench-accent: #7c3aed; /* Obsidian風の紫 */
+  /* ダークテーマで青が強すぎる場合があるため、リンクはQuench側のアクセント寄せにする */
+  --quench-link: color-mix(in srgb, var(--quench-accent) 82%, #fff 18%);
+  --quench-link-active: color-mix(in srgb, var(--quench-accent) 62%, #fff 38%);
+  --quench-muted: color-mix(in srgb, var(--quench-fg) 70%, var(--quench-bg) 30%);
+  --quench-code-fg: color-mix(in srgb, var(--quench-fg) 92%, #fff 8%);
+  --quench-code-keyword: color-mix(in srgb, var(--quench-accent) 70%, #fff 30%);
+  --quench-code-string: color-mix(in srgb, #22c55e 70%, #fff 30%);
+  --quench-code-number: color-mix(in srgb, #f59e0b 70%, #fff 30%);
+  --quench-code-comment: var(--quench-muted);
+  --quench-code-bg: color-mix(in srgb, var(--quench-bg) 70%, #000 30%);
+  --quench-code-border: color-mix(in srgb, var(--quench-border) 60%, transparent 40%);
 }
 
 html,
@@ -39,7 +52,40 @@ body {
 }
 
 .qm-syntax-dim {
-  opacity: 0.35;
+  opacity: 0.6;
+}
+.qm-syntax {
+  color: var(--quench-muted);
+  text-decoration: none !important;
+  text-decoration-line: none !important;
+}
+.qm-syntax-dim {
+  text-decoration: none !important;
+  text-decoration-line: none !important;
+}
+/* CodeMirrorのトークン側が誤って下線を付けるケース（見出しの "## " など）を抑止 */
+.cm-content .cm-formatting-header,
+.cm-content .cm-formatting-heading,
+.cm-content .cm-header,
+.cm-content .cm-heading,
+.cm-content .cm-header-1,
+.cm-content .cm-header-2,
+.cm-content .cm-header-3,
+.cm-content .cm-header-4,
+.cm-content .cm-header-5,
+.cm-content .cm-header-6,
+.cm-content .qm-syntax.cm-link,
+.cm-content .qm-syntax-dim.cm-link {
+  text-decoration: none !important;
+  text-decoration-line: none !important;
+}
+/* CodeMirror v6 classHighlighter (tok-*) 側でも同様に抑止 */
+.cm-content .qm-syntax.tok-link,
+.cm-content .qm-syntax-dim.tok-link,
+.cm-content .qm-syntax.tok-url,
+.cm-content .qm-syntax-dim.tok-url {
+  text-decoration: none !important;
+  text-decoration-line: none !important;
 }
 
 #preview {
@@ -71,4 +117,290 @@ body {
 
 .cm-editor {
   height: 100%;
+}
+
+/* Cursor visibility (VSCode theme) */
+.cm-content {
+  caret-color: var(--quench-cursor);
+}
+.cm-cursor,
+.cm-dropCursor {
+  border-left-color: var(--quench-cursor) !important;
+}
+
+/* Live Preview styling (Obsidian-ish) */
+.cm-line.md-heading-line,
+.cm-line.md-heading-line * {
+  text-decoration: none !important;
+  text-decoration-line: none !important;
+}
+.md-heading {
+  color: var(--quench-accent);
+  font-weight: 650;
+  text-decoration: none !important;
+}
+/* CodeMirrorのmark装飾はネストされない/同一spanに複数classが付く場合があるため、強めに無効化する */
+.md-heading,
+.md-heading *,
+.md-heading.md-link,
+.md-heading.cm-link,
+.md-heading.tok-link,
+.md-heading.tok-url,
+.md-heading .md-link,
+.md-heading .cm-link,
+.md-heading .tok-link,
+.md-heading .tok-url {
+  text-decoration: none !important;
+}
+.md-h1 {
+  font-size: 1.55em;
+}
+.md-h2 {
+  font-size: 1.35em;
+}
+.md-h3 {
+  font-size: 1.18em;
+}
+.md-h4 {
+  font-size: 1.08em;
+}
+.md-h5 {
+  font-size: 1.02em;
+}
+.md-h6 {
+  font-size: 1em;
+  opacity: 0.95;
+}
+
+.md-inline-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: var(--quench-code-bg);
+  border: 1px solid var(--quench-code-border);
+  border-radius: 6px;
+  padding: 0.05em 0.35em;
+  color: var(--quench-code-fg);
+}
+
+.md-bullet {
+  display: inline-block;
+  width: 1.25em;
+  text-align: center;
+  color: var(--quench-accent);
+  font-weight: 700;
+}
+
+.md-link {
+  color: var(--quench-link);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--quench-link) 60%, transparent 40%);
+  text-underline-offset: 2px;
+}
+.md-link-destination {
+  color: color-mix(in srgb, var(--quench-link) 55%, var(--quench-fg) 45%);
+}
+
+/* CodeMirror highlight classes (fallback for markdown tokens) */
+.cm-link {
+  color: var(--quench-link);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--quench-link) 60%, transparent 40%);
+  text-underline-offset: 2px;
+}
+.cm-link:hover {
+  color: var(--quench-link-active);
+}
+.cm-url {
+  color: color-mix(in srgb, var(--quench-link) 55%, var(--quench-fg) 45%);
+}
+
+/* CodeMirror v6 classHighlighter (tok-*) */
+.cm-content .tok-link {
+  color: var(--quench-link);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--quench-link) 60%, transparent 40%);
+  text-underline-offset: 2px;
+}
+.cm-content .tok-link:hover {
+  color: var(--quench-link-active);
+}
+.cm-content .tok-url {
+  color: color-mix(in srgb, var(--quench-link) 55%, var(--quench-fg) 45%);
+}
+.cm-content .tok-heading,
+.cm-content .tok-heading * {
+  text-decoration: none !important;
+}
+
+/* CodeMirror syntax tokens: avoid "too blue" in dark themes */
+.cm-content .cm-keyword {
+  color: var(--quench-code-keyword);
+}
+.cm-content .cm-string {
+  color: var(--quench-code-string);
+}
+.cm-content .cm-number {
+  color: var(--quench-code-number);
+}
+.cm-content .cm-comment {
+  color: var(--quench-code-comment);
+}
+.cm-content .cm-variableName,
+.cm-content .cm-typeName,
+.cm-content .cm-propertyName,
+.cm-content .cm-function,
+.cm-content .cm-operator,
+.cm-content .cm-punctuation {
+  color: var(--quench-code-fg);
+}
+.cm-content .cm-hr {
+  color: var(--quench-muted);
+}
+
+/* tok-* 版の色も揃える（defaultHighlightStyle が tok-* を付ける環境向け） */
+.cm-content .tok-keyword {
+  color: var(--quench-code-keyword);
+}
+.cm-content .tok-string,
+.cm-content .tok-string2 {
+  color: var(--quench-code-string);
+}
+.cm-content .tok-number,
+.cm-content .tok-bool,
+.cm-content .tok-atom,
+.cm-content .tok-literal {
+  color: var(--quench-code-number);
+}
+.cm-content .tok-comment {
+  color: var(--quench-code-comment);
+}
+.cm-content .tok-variableName,
+.cm-content .tok-typeName,
+.cm-content .tok-propertyName,
+.cm-content .tok-operator,
+.cm-content .tok-punctuation {
+  color: var(--quench-code-fg);
+}
+.cm-content .tok-meta {
+  color: var(--quench-muted);
+}
+
+.cm-line.md-table-row {
+  border-left: 2px solid color-mix(in srgb, var(--quench-accent) 55%, transparent 45%);
+  border-right: 1px solid color-mix(in srgb, var(--quench-border) 55%, transparent 45%);
+  padding-left: 10px;
+  padding-right: 10px;
+  margin-left: -10px;
+  margin-right: 0;
+}
+.cm-line.md-table-first {
+  border-top: 1px solid color-mix(in srgb, var(--quench-border) 55%, transparent 45%);
+  border-top-left-radius: 10px;
+  border-top-right-radius: 10px;
+  padding-top: 6px;
+}
+.cm-line.md-table-last {
+  border-bottom: 1px solid color-mix(in srgb, var(--quench-border) 55%, transparent 45%);
+  border-bottom-left-radius: 10px;
+  border-bottom-right-radius: 10px;
+  padding-bottom: 6px;
+}
+.cm-line.md-table-header {
+  font-weight: 650;
+  background: color-mix(in srgb, var(--quench-bg) 90%, var(--quench-accent) 10%);
+}
+.cm-line.md-table-sep {
+  opacity: 0.65;
+}
+.cm-line.md-table-zebra {
+  background: color-mix(in srgb, var(--quench-bg) 94%, #fff 6%);
+}
+
+/* Fenced code block (Obsidian-ish) */
+.cm-line.md-codeblock-line {
+  background: color-mix(in srgb, var(--quench-bg) 86%, #fff 14%);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.cm-line.md-codeblock-fence {
+  opacity: 0.95;
+  position: relative;
+}
+.md-codeblock-lang {
+  display: inline-block;
+  margin-left: 10px;
+  margin-top: 2px;
+  margin-bottom: 2px;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--quench-bg) 75%, #000 25%);
+  border: 1px solid var(--quench-code-border);
+  color: color-mix(in srgb, var(--quench-fg) 85%, #fff 15%);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.cm-line.md-hr-line {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+.md-hr {
+  height: 2px;
+  width: 100%;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--quench-border) 70%, transparent 30%);
+}
+
+.md-task-checkbox {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  border-radius: 5px;
+  border: 1px solid color-mix(in srgb, var(--quench-border) 65%, transparent 35%);
+  background: color-mix(in srgb, var(--quench-bg) 78%, #000 22%);
+  vertical-align: -3px;
+  position: relative;
+  cursor: pointer;
+}
+.md-task-checkbox--checked {
+  border-color: color-mix(in srgb, var(--quench-accent) 65%, transparent 35%);
+  background: color-mix(in srgb, var(--quench-accent) 55%, var(--quench-bg) 45%);
+}
+.md-task-checkbox--checked::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 2px;
+  width: 6px;
+  height: 9px;
+  border-right: 2px solid #fff;
+  border-bottom: 2px solid #fff;
+  transform: rotate(40deg);
+}
+
+.cm-line.md-quote-line {
+  border-left: 3px solid color-mix(in srgb, var(--quench-accent) 50%, transparent 50%);
+  padding-left: 10px;
+  margin-left: -10px;
+}
+.cm-line.md-quote-depth-2 {
+  border-left-color: color-mix(in srgb, var(--quench-accent) 38%, transparent 62%);
+}
+.cm-line.md-quote-depth-3 {
+  border-left-color: color-mix(in srgb, var(--quench-accent) 28%, transparent 72%);
+}
+.cm-line.md-quote-depth-4,
+.cm-line.md-quote-depth-5,
+.cm-line.md-quote-depth-6 {
+  border-left-color: color-mix(in srgb, var(--quench-accent) 22%, transparent 78%);
+}
+
+.md-embed-image {
+  margin: 8px 0 12px;
+}
+.md-embed-image--error {
+  padding: 10px 12px;
+  border: 1px dashed color-mix(in srgb, var(--quench-border) 70%, transparent 30%);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--quench-bg) 90%, #000 10%);
+  color: color-mix(in srgb, var(--quench-fg) 85%, #fff 15%);
 }

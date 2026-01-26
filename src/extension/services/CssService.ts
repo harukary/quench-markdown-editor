@@ -7,45 +7,27 @@ export class CssService implements vscode.Disposable {
   private readonly cssUpdatedEmitter = new vscode.EventEmitter<void>();
   readonly onDidCssUpdated = this.cssUpdatedEmitter.event;
   private readonly cssUris = new Set<string>();
+  private readonly watcherDisposables: vscode.Disposable[] = [];
 
   constructor(
     private readonly document: vscode.TextDocument,
     private readonly panel: vscode.WebviewPanel,
     private readonly context: vscode.ExtensionContext
   ) {
-    const settings = getQuenchSettings();
-    const folder = vscode.workspace.getWorkspaceFolder(this.document.uri);
-    if (!folder) return;
-
-    for (const relPathRaw of settings.cssFiles) {
-      const validated = validateWorkspaceRelativePath(relPathRaw);
-      if (!validated.ok) {
-        vscode.window.showErrorMessage(
-          `Quench: quench.css.files はワークスペース相対パスのみ対応です: ${relPathRaw} (${validated.reason})`
-        );
-        continue;
-      }
-
-      const relPath = validated.path;
-      const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(folder, relPath));
-      this.disposables.push(watcher);
-      this.cssUris.add(vscode.Uri.joinPath(folder.uri, relPath).toString());
-
-      const fire = () => this.cssUpdatedEmitter.fire();
-      watcher.onDidChange(fire, null, this.disposables);
-      watcher.onDidCreate(fire, null, this.disposables);
-      watcher.onDidDelete(fire, null, this.disposables);
-    }
-
-    if (settings.cssReloadOnSave) {
-      this.disposables.push(
-        vscode.workspace.onDidSaveTextDocument((doc) => {
-          if (doc.languageId !== "css") return;
-          if (!this.cssUris.has(doc.uri.toString())) return;
+    this.rebuildWatchers();
+    this.disposables.push(
+      vscode.workspace.onDidChangeConfiguration((e) => {
+        const folder = vscode.workspace.getWorkspaceFolder(this.document.uri);
+        if (!folder) return;
+        if (
+          e.affectsConfiguration("quench.css.files", folder.uri) ||
+          e.affectsConfiguration("quench.css.reloadOnSave", folder.uri)
+        ) {
+          this.rebuildWatchers();
           this.cssUpdatedEmitter.fire();
-        })
-      );
-    }
+        }
+      })
+    );
   }
 
   onCssUpdated(listener: () => unknown): vscode.Disposable {
@@ -85,9 +67,50 @@ export class CssService implements vscode.Disposable {
   }
 
   dispose(): void {
+    this.watcherDisposables.forEach((d) => d.dispose());
+    this.watcherDisposables.length = 0;
     this.disposables.forEach((d) => d.dispose());
     this.disposables.length = 0;
     this.cssUpdatedEmitter.dispose();
+  }
+
+  private rebuildWatchers(): void {
+    this.watcherDisposables.forEach((d) => d.dispose());
+    this.watcherDisposables.length = 0;
+    this.cssUris.clear();
+
+    const settings = getQuenchSettings(this.document.uri);
+    const folder = vscode.workspace.getWorkspaceFolder(this.document.uri);
+    if (!folder) return;
+
+    for (const relPathRaw of settings.cssFiles) {
+      const validated = validateWorkspaceRelativePath(relPathRaw);
+      if (!validated.ok) {
+        vscode.window.showErrorMessage(
+          `Quench: quench.css.files はワークスペース相対パスのみ対応です: ${relPathRaw} (${validated.reason})`
+        );
+        continue;
+      }
+
+      const relPath = validated.path;
+      const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(folder, relPath));
+      this.watcherDisposables.push(watcher);
+      this.cssUris.add(vscode.Uri.joinPath(folder.uri, relPath).toString());
+
+      const fire = () => this.cssUpdatedEmitter.fire();
+      watcher.onDidChange(fire, null, this.watcherDisposables);
+      watcher.onDidCreate(fire, null, this.watcherDisposables);
+      watcher.onDidDelete(fire, null, this.watcherDisposables);
+    }
+
+    if (settings.cssReloadOnSave) {
+      const saveDisposable = vscode.workspace.onDidSaveTextDocument((doc) => {
+        if (doc.languageId !== "css") return;
+        if (!this.cssUris.has(doc.uri.toString())) return;
+        this.cssUpdatedEmitter.fire();
+      });
+      this.watcherDisposables.push(saveDisposable);
+    }
   }
 }
 

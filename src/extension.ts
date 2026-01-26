@@ -18,6 +18,12 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
+    vscode.commands.registerCommand("quench.createThemeCss", async () => {
+      await provider.createThemeCss();
+    })
+  );
+
+  context.subscriptions.push(
     vscode.commands.registerCommand("quench.rebuildWorkspaceIndex", async () => {
       await provider.rebuildWorkspaceIndex();
     })
@@ -35,6 +41,11 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand("quench.insertImageFromFile", async () => {
       await provider.insertImageFromFile();
+    })
+  );
+  context.subscriptions.push(
+    vscode.commands.registerCommand("quench.resizeImage", async () => {
+      await provider.resizeImage();
     })
   );
   context.subscriptions.push(

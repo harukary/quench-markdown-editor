@@ -46,6 +46,13 @@ export async function openLink(fromUri: vscode.Uri, href: string): Promise<void>
     return;
   }
 
+  const ext = path.posix.extname(resolved.targetUri.path).toLowerCase();
+  if (ext && ext !== ".md") {
+    // 画像やPDFなどは VSCode の既定ビューアに任せる（TextDocumentとして開くと失敗する場合がある）
+    await vscode.commands.executeCommand("vscode.open", resolved.targetUri);
+    return;
+  }
+
   const doc = await vscode.workspace.openTextDocument(resolved.targetUri);
   const editor = await vscode.window.showTextDocument(doc, { preview: false });
 
@@ -67,6 +74,16 @@ export async function getPreviewText(fromUri: vscode.Uri, href: string): Promise
     return { title: href, text: href };
   }
 
+  const rel = vscode.workspace.asRelativePath(resolved.targetUri);
+  const ext = path.posix.extname(resolved.targetUri.path).toLowerCase();
+  const imageExts = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"]);
+  if (imageExts.has(ext)) {
+    return { title: rel, text: "（画像ファイルのためテキストプレビューはありません）" };
+  }
+  if (ext && ext !== ".md") {
+    return { title: rel, text: `（テキストプレビュー未対応: ${ext}）` };
+  }
+
   const doc = await vscode.workspace.openTextDocument(resolved.targetUri);
   const text = doc.getText();
   const lines = text.split(/\r?\n/);
@@ -82,5 +99,5 @@ export async function getPreviewText(fromUri: vscode.Uri, href: string): Promise
   }
 
   const excerpt = lines.slice(0, 12).join("\n");
-  return { title: vscode.workspace.asRelativePath(resolved.targetUri), text: excerpt };
+  return { title: rel, text: excerpt };
 }
