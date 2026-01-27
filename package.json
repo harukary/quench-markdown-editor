@@ -106,6 +106,12 @@
           "scope": "resource",
           "description": "Re-inject CSS into the Webview automatically when CSS files are saved."
         },
+        "quench.editor.lineWrapping": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "description": "Wrap long lines in Quench editor (CodeMirror line wrapping)."
+        },
         "quench.preview.syntaxVisibility": {
           "type": "string",
           "enum": [

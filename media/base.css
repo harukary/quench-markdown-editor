@@ -1,5 +1,6 @@
 :root {
-  --quench-font: var(--vscode-font-family);
+  /* Prefer VS Code's editor font over UI font for the editing surface */
+  --quench-font: var(--vscode-editor-font-family, var(--vscode-font-family));
   --quench-font-size: var(--vscode-font-size);
   --quench-bg: var(--vscode-editor-background);
   --quench-fg: var(--vscode-editor-foreground);

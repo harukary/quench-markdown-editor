@@ -73,6 +73,7 @@ function initEditor(text: string) {
     extensions: [
       markdown({ codeLanguages: languages }),
       syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+      ...(settings?.editor.lineWrapping ? [EditorView.lineWrapping] : []),
       livePreviewPlugin(),
       EditorView.updateListener.of((update) => {
         if (!update.docChanged) return;

@@ -7,6 +7,7 @@ export function getQuenchSettings(resource?: vscode.Uri): QuenchSettings {
   // VSCodeは設定をフラットキーでも取得できるが、型を明確にするため個別に読む。
   const cssFiles = quench.get<string[]>("css.files", []);
   const cssReloadOnSave = quench.get<boolean>("css.reloadOnSave", true);
+  const editorLineWrapping = quench.get<boolean>("editor.lineWrapping", true);
   const syntaxVisibility = quench.get<QuenchSettings["syntaxVisibility"]>("preview.syntaxVisibility", "smart");
   const previewOnHover = quench.get<boolean>("links.previewOnHover", true);
   const slugStyle = quench.get<QuenchSettings["slugStyle"]>("links.slugStyle", "github");
@@ -31,6 +32,9 @@ export function getQuenchSettings(resource?: vscode.Uri): QuenchSettings {
   return {
     cssFiles,
     cssReloadOnSave,
+    editor: {
+      lineWrapping: editorLineWrapping
+    },
     syntaxVisibility,
     previewOnHover,
     slugStyle,

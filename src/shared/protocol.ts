@@ -1,6 +1,9 @@
 export type QuenchSettings = {
   cssFiles: string[];
   cssReloadOnSave: boolean;
+  editor: {
+    lineWrapping: boolean;
+  };
   syntaxVisibility: "smart" | "always" | "minimal";
   previewOnHover: boolean;
   slugStyle: "github";
