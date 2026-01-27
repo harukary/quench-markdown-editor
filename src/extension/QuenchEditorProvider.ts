@@ -3,6 +3,7 @@ import { CssService } from "./services/CssService";
 import {
   assertWebviewToExtensionMessage,
   ExtensionToWebviewMessage,
+  QuenchThemeKind,
   TextChange,
   WebviewToExtensionMessage
 } from "../shared/protocol";
@@ -27,13 +28,47 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
   private readonly editorsByDocumentKey = new Map<string, Set<EditorInstance>>();
   private lastActiveEditor: EditorInstance | null = null;
   private readonly workspaceIndex = new WorkspaceIndex();
+  private currentThemeKind: QuenchThemeKind;
 
   constructor(private readonly context: vscode.ExtensionContext) {
+    this.currentThemeKind = this.computeThemeKind(vscode.window.activeColorTheme.kind);
+    this.context.subscriptions.push(
+      vscode.window.onDidChangeActiveColorTheme((theme) => {
+        this.currentThemeKind = this.computeThemeKind(theme.kind);
+        this.broadcastThemeChanged();
+      })
+    );
     void this.workspaceIndex.rebuild();
   }
 
   dispose() {
     this.workspaceIndex.dispose();
+  }
+
+  private computeThemeKind(kind: vscode.ColorThemeKind): QuenchThemeKind {
+    switch (kind) {
+      case vscode.ColorThemeKind.Light:
+        return "light";
+      case vscode.ColorThemeKind.Dark:
+        return "dark";
+      case vscode.ColorThemeKind.HighContrast:
+        return "high-contrast";
+      case vscode.ColorThemeKind.HighContrastLight:
+        return "high-contrast-light";
+      default:
+        return "dark";
+    }
+  }
+
+  private broadcastThemeChanged() {
+    for (const set of this.editorsByDocumentKey.values()) {
+      for (const editor of set.values()) {
+        editor.panel.webview.postMessage({
+          type: "THEME_CHANGED",
+          themeKind: this.currentThemeKind
+        } satisfies ExtensionToWebviewMessage);
+      }
+    }
   }
 
   async reloadCssForAllEditors(): Promise<void> {
@@ -466,6 +501,7 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
       documentUri: document.uri.toString(),
       text: document.getText(),
       version: document.version,
+      themeKind: this.currentThemeKind,
       settings,
       cssText
     } satisfies ExtensionToWebviewMessage);
@@ -803,7 +839,7 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
     <style id="quench-user-css"></style>
     <title>Quench</title>
   </head>
-  <body>
+  <body data-quench-theme-kind="${this.currentThemeKind}">
     <div id="root">
       <div id="editor" role="application" aria-label="Quench Markdown Editor"></div>
       <div id="preview" hidden></div>

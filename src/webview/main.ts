@@ -63,6 +63,10 @@ const pendingResourceRequestIds = new Map<string, string>(); // requestId -> cac
 
 const forceRedrawEffect = StateEffect.define<void>();
 
+function applyThemeKind(kind: string) {
+  document.body.dataset.quenchThemeKind = kind;
+}
+
 function baseVersionForNextEdit(): number {
   return lastConfirmedVersion + pendingRequestIds.length;
 }
@@ -1047,11 +1051,16 @@ const handleMessageEvent = (event: MessageEvent) => {
   switch (msg.type) {
     case "INIT": {
       settings = msg.settings;
+      applyThemeKind(msg.themeKind);
       documentUri = msg.documentUri;
       lastConfirmedVersion = msg.version;
       applyCss(msg.cssText);
       initEditor(msg.text);
       hideBanner();
+      break;
+    }
+    case "THEME_CHANGED": {
+      applyThemeKind(msg.themeKind);
       break;
     }
     case "REQUEST_SELECTION": {

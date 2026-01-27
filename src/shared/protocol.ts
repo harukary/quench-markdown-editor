@@ -20,6 +20,8 @@ export type QuenchSettings = {
   };
 };
 
+export type QuenchThemeKind = "light" | "dark" | "high-contrast" | "high-contrast-light";
+
 export type TextChange = {
   rangeOffset: number;
   rangeLength: number;
@@ -32,8 +34,13 @@ export type ExtensionToWebviewMessage =
       documentUri: string;
       text: string;
       version: number;
+      themeKind: QuenchThemeKind;
       settings: QuenchSettings;
       cssText: string[];
+    }
+  | {
+      type: "THEME_CHANGED";
+      themeKind: QuenchThemeKind;
     }
   | {
       type: "REQUEST_SELECTION";
@@ -306,8 +313,13 @@ export function assertExtensionToWebviewMessage(value: unknown): ExtensionToWebv
       assertString(value.documentUri, "INIT.documentUri");
       assertString(value.text, "INIT.text");
       assertNumber(value.version, "INIT.version");
+      assertString(value.themeKind, "INIT.themeKind");
       if (!isRecord(value.settings)) throw new Error("Invalid INIT.settings");
       if (!Array.isArray(value.cssText) || !value.cssText.every((s) => typeof s === "string")) throw new Error("Invalid INIT.cssText");
+      return value as ExtensionToWebviewMessage;
+    }
+    case "THEME_CHANGED": {
+      assertString(value.themeKind, "THEME_CHANGED.themeKind");
       return value as ExtensionToWebviewMessage;
     }
     case "REQUEST_SELECTION": {

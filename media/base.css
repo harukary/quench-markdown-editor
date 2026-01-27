@@ -8,8 +8,8 @@
   /* Some environments don't expose --vscode-editorCursor-foreground to Webviews.
      Keep an explicit fallback so the caret doesn't become black-on-dark. */
   --quench-cursor: var(--vscode-editorCursor-foreground, var(--vscode-editor-foreground, #000000));
-  --quench-accent: #7c3aed; /* Obsidian風の紫 */
-  /* ダークテーマで青が強すぎる場合があるため、リンクはQuench側のアクセント寄せにする */
+  /* Obsidian-ish accent (theme-kind overrides below) */
+  --quench-accent: #7c3aed;
   --quench-link: color-mix(in srgb, var(--quench-accent) 82%, #fff 18%);
   --quench-link-active: color-mix(in srgb, var(--quench-accent) 62%, #fff 38%);
   --quench-muted: color-mix(in srgb, var(--quench-fg) 70%, var(--quench-bg) 30%);
@@ -27,20 +27,31 @@ body {
   height: 100%;
 }
 
-/* Cursor visibility: some themes provide a low-contrast cursor in Webviews.
-   In dark theme, default to white for better visibility (users can override via workspace CSS). */
-/* VS Code webviews usually set body class (vscode-dark/...), but in some cases
-   only data-vscode-theme-kind is updated. Support both. */
+/* Quench theme follows VS Code's light/dark switch.
+   We use data-quench-theme-kind (set by the extension) as the primary source. */
+body[data-quench-theme-kind="dark"],
+body[data-quench-theme-kind="high-contrast"] {
+  --quench-cursor: #ffffff;
+}
+
+body[data-quench-theme-kind="light"],
+body[data-quench-theme-kind="high-contrast-light"] {
+  --quench-accent: #6d28d9;
+  --quench-link: color-mix(in srgb, var(--quench-accent) 88%, #000 12%);
+  --quench-link-active: color-mix(in srgb, var(--quench-accent) 72%, #000 28%);
+  --quench-code-fg: color-mix(in srgb, var(--quench-fg) 96%, #000 4%);
+  --quench-code-keyword: color-mix(in srgb, var(--quench-accent) 78%, #000 22%);
+  --quench-code-string: color-mix(in srgb, #16a34a 78%, #000 22%);
+  --quench-code-number: color-mix(in srgb, #d97706 78%, #000 22%);
+  --quench-code-bg: color-mix(in srgb, var(--quench-bg) 92%, #000 8%);
+}
+
+/* Fallbacks (older VS Code behavior / unexpected env) */
 body.vscode-dark,
 body.vscode-high-contrast,
 body[data-vscode-theme-kind="vscode-dark"],
 body[data-vscode-theme-kind="vscode-high-contrast"] {
   --quench-cursor: #ffffff;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --quench-cursor: #ffffff;
-  }
 }
 
 body {
