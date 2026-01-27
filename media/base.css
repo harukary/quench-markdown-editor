@@ -5,7 +5,9 @@
   --quench-bg: var(--vscode-editor-background);
   --quench-fg: var(--vscode-editor-foreground);
   --quench-border: var(--vscode-editorWidget-border);
-  --quench-cursor: var(--vscode-editorCursor-foreground);
+  /* Some environments don't expose --vscode-editorCursor-foreground to Webviews.
+     Keep an explicit fallback so the caret doesn't become black-on-dark. */
+  --quench-cursor: var(--vscode-editorCursor-foreground, #000000);
   --quench-accent: #7c3aed; /* Obsidian風の紫 */
   /* ダークテーマで青が強すぎる場合があるため、リンクはQuench側のアクセント寄せにする */
   --quench-link: color-mix(in srgb, var(--quench-accent) 82%, #fff 18%);
@@ -27,8 +29,14 @@ body {
 
 /* Cursor visibility: some themes provide a low-contrast cursor in Webviews.
    In dark theme, default to white for better visibility (users can override via workspace CSS). */
-body.vscode-dark {
+body.vscode-dark,
+body.vscode-high-contrast {
   --quench-cursor: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --quench-cursor: #ffffff;
+  }
 }
 
 body {
