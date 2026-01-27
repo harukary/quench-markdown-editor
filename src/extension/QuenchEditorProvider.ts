@@ -221,11 +221,28 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
       if (!raw || typeof raw !== "object") return;
       const type = (raw as any).type;
       if (type === "SETTINGS_UI_READY") {
+        const resource =
+          this.lastActiveEditor?.document.uri ??
+          vscode.workspace.workspaceFolders?.[0]?.uri ??
+          // Fallback to global scope (no resource)
+          undefined;
         const overrides = (await this.globalSettings.readOverrides()) ?? {};
+        const effectiveSettings = resource ? this.getEffectiveSettings(resource) : getQuenchSettings();
+        const theme = {
+          // Defaults are aligned with media/base.css
+          accentDark: overrides.theme?.accentDark ?? "#7c3aed",
+          accentLight: overrides.theme?.accentLight ?? "#6d28d9",
+          cursorDark: overrides.theme?.cursorDark ?? "#ffffff",
+          cursorLight: overrides.theme?.cursorLight ?? ""
+        };
         panel.webview.postMessage({
           type: "SETTINGS_UI_INIT",
           filePath: this.globalSettings.getFileUri().fsPath,
-          overrides
+          overrides,
+          effective: {
+            settings: effectiveSettings,
+            theme
+          }
         });
         return;
       }
@@ -1197,7 +1214,23 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
         if (!msg || typeof msg.type !== "string") return;
         if (msg.type === "SETTINGS_UI_INIT") {
           filePath.textContent = msg.filePath || "(unknown)";
-          applyOverrides(msg.overrides || {});
+          const eff = msg.effective || {};
+          const s = eff.settings || {};
+          const t = eff.theme || {};
+
+          // Fill with current effective values (includes defaults and VS Code settings)
+          setV("accentDark", t.accentDark);
+          setV("accentLight", t.accentLight);
+          setV("cursorDark", t.cursorDark);
+          setV("cursorLight", t.cursorLight);
+
+          setTri("lineWrapping", s.editor && s.editor.lineWrapping);
+          setV("syntaxVisibility", s.syntaxVisibility || "");
+          setTri("previewOnHover", s.previewOnHover);
+          setTri("allowExternalImages", s.security && s.security.allowExternalImages);
+          setTri("allowHtmlEmbeds", s.security && s.security.allowHtmlEmbeds);
+          setTri("allowIframes", s.security && s.security.allowIframes);
+
           setStatus("");
         }
         if (msg.type === "SAVE_OK") {
