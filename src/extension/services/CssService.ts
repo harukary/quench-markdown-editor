@@ -35,7 +35,7 @@ export class CssService implements vscode.Disposable {
   }
 
   async readAllCssText(): Promise<string[]> {
-    const settings = getQuenchSettings();
+    const settings = getQuenchSettings(this.document.uri);
     const folder = vscode.workspace.getWorkspaceFolder(this.document.uri);
     if (!folder) return [];
 
