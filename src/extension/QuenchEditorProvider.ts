@@ -4,6 +4,7 @@ import {
   assertWebviewToExtensionMessage,
   ExtensionToWebviewMessage,
   QuenchThemeKind,
+  QuenchSettings,
   TextChange,
   WebviewToExtensionMessage
 } from "../shared/protocol";
@@ -13,6 +14,7 @@ import { createImageAttachment } from "./services/AttachmentService";
 import { computeRelativeMarkdownPath, getPreviewText, openLink } from "./services/LinkService";
 import { extractHeadings } from "./services/HeadingService";
 import * as path from "node:path";
+import { GlobalSettingsService, QuenchGlobalOverrides } from "./services/GlobalSettingsService";
 
 type EditorInstance = {
   panel: vscode.WebviewPanel;
@@ -29,9 +31,20 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
   private lastActiveEditor: EditorInstance | null = null;
   private readonly workspaceIndex = new WorkspaceIndex();
   private currentThemeKind: QuenchThemeKind;
+  private readonly globalSettings: GlobalSettingsService;
+  private globalOverrides: QuenchGlobalOverrides | null = null;
 
   constructor(private readonly context: vscode.ExtensionContext) {
     this.currentThemeKind = this.computeThemeKind(vscode.window.activeColorTheme.kind);
+    this.globalSettings = new GlobalSettingsService(context);
+    this.context.subscriptions.push(this.globalSettings);
+    this.context.subscriptions.push(
+      this.globalSettings.onDidChange(async () => {
+        await this.reloadGlobalOverrides();
+        await this.reloadCssForAllEditors();
+        this.broadcastSettingsUpdated();
+      })
+    );
     this.context.subscriptions.push(
       vscode.window.onDidChangeActiveColorTheme((theme) => {
         this.currentThemeKind = this.computeThemeKind(theme.kind);
@@ -39,10 +52,75 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
       })
     );
     void this.workspaceIndex.rebuild();
+    void this.reloadGlobalOverrides();
   }
 
   dispose() {
     this.workspaceIndex.dispose();
+  }
+
+  private async reloadGlobalOverrides() {
+    this.globalOverrides = await this.globalSettings.readOverrides();
+  }
+
+  private getEffectiveSettings(resource: vscode.Uri): QuenchSettings {
+    const base = getQuenchSettings(resource);
+    const o = this.globalOverrides;
+    if (!o) return base;
+
+    const next: QuenchSettings = {
+      ...base,
+      editor: {
+        ...base.editor,
+        ...(o.editor ?? {})
+      },
+      syntaxVisibility: o.preview?.syntaxVisibility ?? base.syntaxVisibility,
+      previewOnHover: o.links?.previewOnHover ?? base.previewOnHover,
+      security: {
+        ...base.security,
+        ...(o.security ?? {})
+      }
+    };
+    return next;
+  }
+
+  private buildGlobalThemeCss(): string {
+    const o = this.globalOverrides;
+    if (!o?.theme) return "";
+    const lines: string[] = [];
+    const t = o.theme;
+
+    lines.push(":root {");
+    if (t.accentDark) lines.push(`  --quench-accent: ${t.accentDark};`);
+    if (t.cursorDark) lines.push(`  --quench-cursor: ${t.cursorDark};`);
+    lines.push("}");
+
+    if (t.accentLight || t.cursorLight) {
+      lines.push('body[data-quench-theme-kind="light"],');
+      lines.push('body[data-quench-theme-kind="high-contrast-light"] {');
+      if (t.accentLight) lines.push(`  --quench-accent: ${t.accentLight};`);
+      if (t.cursorLight) lines.push(`  --quench-cursor: ${t.cursorLight};`);
+      lines.push("}");
+    }
+
+    return lines.join("\n");
+  }
+
+  private async computeCssTextForEditor(editor: EditorInstance): Promise<string[]> {
+    const globalCss = this.buildGlobalThemeCss();
+    const cssText = await editor.cssService.readAllCssText();
+    return globalCss.length > 0 ? [globalCss, ...cssText] : cssText;
+  }
+
+  private broadcastSettingsUpdated() {
+    for (const set of this.editorsByDocumentKey.values()) {
+      for (const editor of set.values()) {
+        editor.panel.webview.postMessage({
+          type: "SETTINGS_UPDATED",
+          settings: this.getEffectiveSettings(editor.document.uri)
+        } satisfies ExtensionToWebviewMessage);
+      }
+    }
   }
 
   private computeThemeKind(kind: vscode.ColorThemeKind): QuenchThemeKind {
@@ -75,7 +153,7 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
     const editors = [...this.editorsByDocumentKey.values()].flatMap((set) => [...set.values()]);
     await Promise.all(
       editors.map(async (editor) => {
-        const cssText = await editor.cssService.readAllCssText();
+        const cssText = await this.computeCssTextForEditor(editor);
         editor.panel.webview.postMessage({ type: "CSS_UPDATED", cssText } satisfies ExtensionToWebviewMessage);
       })
     );
@@ -132,6 +210,44 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
     await this.reloadCssForAllEditors();
   }
 
+  async openSettings(): Promise<void> {
+    const panel = vscode.window.createWebviewPanel("quench.settings", "Quench Settings", vscode.ViewColumn.Active, {
+      enableScripts: true
+    });
+
+    panel.webview.html = this.renderSettingsHtml(panel.webview);
+
+    panel.webview.onDidReceiveMessage(async (raw) => {
+      if (!raw || typeof raw !== "object") return;
+      const type = (raw as any).type;
+      if (type === "SETTINGS_UI_READY") {
+        const overrides = (await this.globalSettings.readOverrides()) ?? {};
+        panel.webview.postMessage({
+          type: "SETTINGS_UI_INIT",
+          filePath: this.globalSettings.getFileUri().fsPath,
+          overrides
+        });
+        return;
+      }
+
+      if (type === "SAVE_GLOBAL_SETTINGS") {
+        const overrides = (raw as any).overrides as unknown;
+        try {
+          // Reuse the service validation by writing and reading back.
+          if (typeof overrides !== "object" || overrides === null) throw new Error("Invalid overrides (must be an object).");
+          await this.globalSettings.writeOverrides(overrides as QuenchGlobalOverrides);
+          await this.reloadGlobalOverrides();
+          await this.reloadCssForAllEditors();
+          this.broadcastSettingsUpdated();
+          panel.webview.postMessage({ type: "SAVE_OK" });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          panel.webview.postMessage({ type: "SAVE_ERROR", message });
+        }
+      }
+    });
+  }
+
   private getThemeCssTemplate(): string {
     return `/* Quench Theme CSS (workspace)
 
@@ -171,7 +287,7 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
 
   private async ensureThemeCss(folder: vscode.WorkspaceFolder): Promise<void> {
     const cfg = vscode.workspace.getConfiguration("quench", folder.uri);
-    const autoCreate = cfg.get<boolean>("theme.autoCreateCss", true);
+    const autoCreate = cfg.get<boolean>("theme.autoCreateCss", false);
     if (!autoCreate) return;
 
     const rel = ".vscode/quench-theme.css";
@@ -495,14 +611,15 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
     console.log("[quench] HTML set, sending INIT...");
 
     const settings = getQuenchSettings(document.uri);
-    const cssText = await cssService.readAllCssText();
+    const settingsEffective = this.getEffectiveSettings(document.uri);
+    const cssText = await this.computeCssTextForEditor(editor);
     panel.webview.postMessage({
       type: "INIT",
       documentUri: document.uri.toString(),
       text: document.getText(),
       version: document.version,
       themeKind: this.currentThemeKind,
-      settings,
+      settings: settingsEffective,
       cssText
     } satisfies ExtensionToWebviewMessage);
 
@@ -515,7 +632,7 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
 
     editor.disposables.push(
       cssService.onCssUpdated(async () => {
-        const cssText = await cssService.readAllCssText();
+        const cssText = await this.computeCssTextForEditor(editor);
         panel.webview.postMessage({ type: "CSS_UPDATED", cssText } satisfies ExtensionToWebviewMessage);
       })
     );
@@ -909,6 +1026,197 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
         });
         document.body.appendChild(script);
       })();
+    </script>
+  </body>
+</html>`;
+  }
+
+  private renderSettingsHtml(webview: vscode.Webview): string {
+    const nonce = this.getNonce();
+    const csp = `default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';`;
+
+    return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="${csp}" />
+    <title>Quench Settings</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body { font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif; padding: 16px; }
+      h1 { margin: 0 0 8px; font-size: 18px; }
+      .muted { opacity: 0.8; font-size: 12px; }
+      .grid { display: grid; grid-template-columns: 220px 1fr; gap: 10px 16px; margin-top: 14px; }
+      label { align-self: center; }
+      input[type="text"], select { width: 100%; padding: 6px 8px; }
+      .row { display: flex; gap: 10px; margin-top: 14px; }
+      button { padding: 7px 10px; }
+      .status { margin-top: 10px; font-size: 12px; }
+      code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    </style>
+  </head>
+  <body>
+    <h1>Quench Settings</h1>
+    <div class="muted">
+      Global settings file: <code id="filePath">(loading...)</code><br />
+      These overrides take precedence over VS Code settings.
+    </div>
+
+    <div class="grid" style="margin-top: 18px;">
+      <div><strong>Theme</strong></div><div></div>
+      <label for="accentDark">Accent (dark)</label>
+      <input id="accentDark" type="text" placeholder="e.g. #7c3aed (empty = inherit)" />
+      <label for="accentLight">Accent (light)</label>
+      <input id="accentLight" type="text" placeholder="e.g. #6d28d9 (empty = inherit)" />
+      <label for="cursorDark">Cursor (dark)</label>
+      <input id="cursorDark" type="text" placeholder="e.g. #ffffff (empty = inherit)" />
+      <label for="cursorLight">Cursor (light)</label>
+      <input id="cursorLight" type="text" placeholder="e.g. #000000 (empty = inherit)" />
+
+      <div><strong>Editor</strong></div><div></div>
+      <label for="lineWrapping">Line wrapping</label>
+      <select id="lineWrapping">
+        <option value="">Inherit</option>
+        <option value="true">On</option>
+        <option value="false">Off</option>
+      </select>
+
+      <div><strong>Preview</strong></div><div></div>
+      <label for="syntaxVisibility">Syntax visibility</label>
+      <select id="syntaxVisibility">
+        <option value="">Inherit</option>
+        <option value="smart">Smart</option>
+        <option value="always">Always</option>
+        <option value="minimal">Minimal</option>
+      </select>
+
+      <div><strong>Links</strong></div><div></div>
+      <label for="previewOnHover">Preview on hover</label>
+      <select id="previewOnHover">
+        <option value="">Inherit</option>
+        <option value="true">On</option>
+        <option value="false">Off</option>
+      </select>
+
+      <div><strong>Security</strong></div><div></div>
+      <label for="allowExternalImages">Allow external images</label>
+      <select id="allowExternalImages">
+        <option value="">Inherit</option>
+        <option value="true">On</option>
+        <option value="false">Off</option>
+      </select>
+      <label for="allowHtmlEmbeds">Allow HTML embeds</label>
+      <select id="allowHtmlEmbeds">
+        <option value="">Inherit</option>
+        <option value="true">On</option>
+        <option value="false">Off</option>
+      </select>
+      <label for="allowIframes">Allow iframes</label>
+      <select id="allowIframes">
+        <option value="">Inherit</option>
+        <option value="true">On</option>
+        <option value="false">Off</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <button id="save">Save</button>
+      <button id="reload">Reload</button>
+    </div>
+    <div class="status" id="status"></div>
+
+    <script nonce="${nonce}">
+      const vscode = acquireVsCodeApi();
+
+      const el = (id) => document.getElementById(id);
+      const status = el("status");
+      const filePath = el("filePath");
+
+      function setStatus(text) { status.textContent = text; }
+      function v(id) { return el(id).value.trim(); }
+      function setV(id, value) { el(id).value = value ?? ""; }
+
+      function setTri(id, value) {
+        if (typeof value === "boolean") el(id).value = value ? "true" : "false";
+        else el(id).value = "";
+      }
+
+      function buildOverrides() {
+        const overrides = {};
+        const theme = {};
+        if (v("accentDark")) theme.accentDark = v("accentDark");
+        if (v("accentLight")) theme.accentLight = v("accentLight");
+        if (v("cursorDark")) theme.cursorDark = v("cursorDark");
+        if (v("cursorLight")) theme.cursorLight = v("cursorLight");
+        if (Object.keys(theme).length) overrides.theme = theme;
+
+        const editor = {};
+        if (v("lineWrapping") === "true") editor.lineWrapping = true;
+        if (v("lineWrapping") === "false") editor.lineWrapping = false;
+        if (Object.keys(editor).length) overrides.editor = editor;
+
+        const preview = {};
+        if (v("syntaxVisibility")) preview.syntaxVisibility = v("syntaxVisibility");
+        if (Object.keys(preview).length) overrides.preview = preview;
+
+        const links = {};
+        if (v("previewOnHover") === "true") links.previewOnHover = true;
+        if (v("previewOnHover") === "false") links.previewOnHover = false;
+        if (Object.keys(links).length) overrides.links = links;
+
+        const security = {};
+        for (const key of ["allowExternalImages", "allowHtmlEmbeds", "allowIframes"]) {
+          const val = v(key);
+          if (val === "true") security[key] = true;
+          if (val === "false") security[key] = false;
+        }
+        if (Object.keys(security).length) overrides.security = security;
+
+        return overrides;
+      }
+
+      function applyOverrides(o) {
+        const theme = (o && o.theme) || {};
+        setV("accentDark", theme.accentDark);
+        setV("accentLight", theme.accentLight);
+        setV("cursorDark", theme.cursorDark);
+        setV("cursorLight", theme.cursorLight);
+
+        setTri("lineWrapping", o && o.editor && o.editor.lineWrapping);
+        setV("syntaxVisibility", (o && o.preview && o.preview.syntaxVisibility) || "");
+        setTri("previewOnHover", o && o.links && o.links.previewOnHover);
+
+        setTri("allowExternalImages", o && o.security && o.security.allowExternalImages);
+        setTri("allowHtmlEmbeds", o && o.security && o.security.allowHtmlEmbeds);
+        setTri("allowIframes", o && o.security && o.security.allowIframes);
+      }
+
+      window.addEventListener("message", (ev) => {
+        const msg = ev.data;
+        if (!msg || typeof msg.type !== "string") return;
+        if (msg.type === "SETTINGS_UI_INIT") {
+          filePath.textContent = msg.filePath || "(unknown)";
+          applyOverrides(msg.overrides || {});
+          setStatus("");
+        }
+        if (msg.type === "SAVE_OK") {
+          setStatus("Saved.");
+        }
+        if (msg.type === "SAVE_ERROR") {
+          setStatus("Save failed: " + (msg.message || "unknown"));
+        }
+      });
+
+      el("save").addEventListener("click", () => {
+        setStatus("Saving...");
+        vscode.postMessage({ type: "SAVE_GLOBAL_SETTINGS", overrides: buildOverrides() });
+      });
+      el("reload").addEventListener("click", () => {
+        vscode.postMessage({ type: "SETTINGS_UI_READY" });
+      });
+
+      vscode.postMessage({ type: "SETTINGS_UI_READY" });
     </script>
   </body>
 </html>`;

@@ -3,6 +3,7 @@ declare function acquireVsCodeApi(): any;
 
 import { EditorState, StateEffect, Text } from "@codemirror/state";
 import { Decoration, EditorView, ViewPlugin, ViewUpdate, WidgetType } from "@codemirror/view";
+import { Compartment } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { defaultHighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
@@ -62,6 +63,7 @@ const resolvedImageCache = new Map<string, ResolvedImageEntry>();
 const pendingResourceRequestIds = new Map<string, string>(); // requestId -> cacheKey
 
 const forceRedrawEffect = StateEffect.define<void>();
+const lineWrappingCompartment = new Compartment();
 
 function inferThemeKindFromDom(): string {
   const explicit = document.body.dataset.quenchThemeKind;
@@ -92,13 +94,23 @@ function baseVersionForNextEdit(): number {
   return lastConfirmedVersion + pendingRequestIds.length;
 }
 
+function applySettings(next: QuenchSettings) {
+  settings = next;
+  if (!view) return;
+  const enableWrap = Boolean(next.editor?.lineWrapping);
+  view.dispatch({
+    effects: lineWrappingCompartment.reconfigure(enableWrap ? EditorView.lineWrapping : [])
+  });
+  view.dispatch({ effects: forceRedrawEffect.of(undefined) });
+}
+
 function initEditor(text: string) {
   const state = EditorState.create({
     doc: text,
     extensions: [
       markdown({ codeLanguages: languages }),
       syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
-      ...(settings?.editor.lineWrapping ? [EditorView.lineWrapping] : []),
+      lineWrappingCompartment.of(settings?.editor?.lineWrapping ? EditorView.lineWrapping : []),
       livePreviewPlugin(),
       EditorView.updateListener.of((update) => {
         if (!update.docChanged) return;
@@ -1071,7 +1083,7 @@ const handleMessageEvent = (event: MessageEvent) => {
 
   switch (msg.type) {
     case "INIT": {
-      settings = msg.settings;
+      applySettings(msg.settings);
       applyThemeKind(msg.themeKind);
       documentUri = msg.documentUri;
       lastConfirmedVersion = msg.version;
@@ -1082,6 +1094,10 @@ const handleMessageEvent = (event: MessageEvent) => {
     }
     case "THEME_CHANGED": {
       applyThemeKind(msg.themeKind);
+      break;
+    }
+    case "SETTINGS_UPDATED": {
+      applySettings(msg.settings);
       break;
     }
     case "REQUEST_SELECTION": {

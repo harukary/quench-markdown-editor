@@ -47,6 +47,10 @@ export type ExtensionToWebviewMessage =
       themeKind: QuenchThemeKind;
     }
   | {
+      type: "SETTINGS_UPDATED";
+      settings: QuenchSettings;
+    }
+  | {
       type: "REQUEST_SELECTION";
       requestId: string;
     }
@@ -324,6 +328,10 @@ export function assertExtensionToWebviewMessage(value: unknown): ExtensionToWebv
     }
     case "THEME_CHANGED": {
       assertString(value.themeKind, "THEME_CHANGED.themeKind");
+      return value as ExtensionToWebviewMessage;
+    }
+    case "SETTINGS_UPDATED": {
+      if (!isRecord(value.settings)) throw new Error("Invalid SETTINGS_UPDATED.settings");
       return value as ExtensionToWebviewMessage;
     }
     case "REQUEST_SELECTION": {

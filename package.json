@@ -28,6 +28,7 @@
     "onCustomEditor:quench.markdownEditor",
     "onCommand:quench.reloadCss",
     "onCommand:quench.createThemeCss",
+    "onCommand:quench.openSettings",
     "onCommand:quench.rebuildWorkspaceIndex",
     "onCommand:quench.insertMarkdownLink",
     "onCommand:quench.insertLinkToHeading",
@@ -56,6 +57,10 @@
       {
         "command": "quench.createThemeCss",
         "title": "Quench: Create Theme CSS (Workspace)"
+      },
+      {
+        "command": "quench.openSettings",
+        "title": "Quench: Open Settings"
       },
       {
         "command": "quench.rebuildWorkspaceIndex",
@@ -87,9 +92,9 @@
       "properties": {
         "quench.theme.autoCreateCss": {
           "type": "boolean",
-          "default": true,
+          "default": false,
           "scope": "resource",
-          "description": "When opening Quench, auto-create .vscode/quench-theme.css if missing, and add it to quench.css.files."
+          "description": "When opening Quench, auto-create .vscode/quench-theme.css if missing, and add it to quench.css.files. (Default: off; use global settings instead.)"
         },
         "quench.css.files": {
           "type": "array",

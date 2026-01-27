@@ -24,6 +24,12 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
+    vscode.commands.registerCommand("quench.openSettings", async () => {
+      await provider.openSettings();
+    })
+  );
+
+  context.subscriptions.push(
     vscode.commands.registerCommand("quench.rebuildWorkspaceIndex", async () => {
       await provider.rebuildWorkspaceIndex();
     })
