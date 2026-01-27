@@ -911,8 +911,25 @@ let hoverTimer: number | null = null;
 let lastHoverHref: string | null = null;
 let lastHoverPoint: { x: number; y: number } | null = null;
 let pendingPreviewRequestId: string | null = null;
+let modifierHoverHandlersAttached = false;
 
 function attachDomHandlers(view: EditorView) {
+  if (!modifierHoverHandlersAttached) {
+    modifierHoverHandlersAttached = true;
+    const setModifierMode = (active: boolean) => {
+      document.body.classList.toggle("quench-mod", active);
+    };
+    window.addEventListener("keydown", (e) => {
+      if (!(e instanceof KeyboardEvent)) return;
+      setModifierMode(Boolean(e.ctrlKey || e.metaKey));
+    });
+    window.addEventListener("keyup", (e) => {
+      if (!(e instanceof KeyboardEvent)) return;
+      setModifierMode(Boolean(e.ctrlKey || e.metaKey));
+    });
+    window.addEventListener("blur", () => setModifierMode(false));
+  }
+
   view.dom.addEventListener("click", (e) => {
     if (!(e instanceof MouseEvent)) return;
     if (!(e.ctrlKey || e.metaKey)) return;
@@ -1060,15 +1077,107 @@ function findLinkHrefAt(view: EditorView, pos: number): string | null {
   const line = view.state.doc.lineAt(pos);
   const text = line.text;
   const offsetInLine = pos - line.from;
+  const within = (start: number, end: number) => offsetInLine >= start && offsetInLine <= end;
+
+  const trimPunctuation = (s: string): string => {
+    let out = s.trim();
+    // Trim common wrappers/punctuation around plain paths/urls (not meant for Markdown link syntax).
+    // Keep leading '#' for in-document fragments.
+    while (out.length > 0) {
+      const first = out[0];
+      if (first === "#" || /[A-Za-z0-9]/.test(first)) break;
+      if (first === "/" || first === "." || first === "~") break;
+      if (first === "<" || first === "(" || first === "[" || first === "{" || first === "\"" || first === "'") {
+        out = out.slice(1);
+        continue;
+      }
+      break;
+    }
+    while (out.length > 0) {
+      const last = out[out.length - 1];
+      if (/[A-Za-z0-9]/.test(last)) break;
+      if (last === "/" || last === "_" || last === "-") break;
+      if (last === ">" || last === ")" || last === "]" || last === "}" || last === "," || last === "." || last === ";" || last === ":" || last === "\""
+        || last === "'") {
+        out = out.slice(0, -1);
+        continue;
+      }
+      break;
+    }
+    return out.trim();
+  };
+
+  const extractTokenAt = (): string | null => {
+    // Conservative tokenization for "plain path / url" on a single line.
+    // We don't try to be smart across whitespace or nested punctuation.
+    const isTokenChar = (ch: string) => /[A-Za-z0-9_./~:#@%+=-]/.test(ch);
+    if (offsetInLine < 0 || offsetInLine > text.length) return null;
+    const idx = Math.min(Math.max(offsetInLine, 0), Math.max(text.length - 1, 0));
+    if (text.length === 0) return null;
+    if (!isTokenChar(text[idx])) return null;
+    let left = idx;
+    let right = idx;
+    while (left - 1 >= 0 && isTokenChar(text[left - 1])) left--;
+    while (right + 1 < text.length && isTokenChar(text[right + 1])) right++;
+    const raw = text.slice(left, right + 1);
+    return trimPunctuation(raw);
+  };
+
   for (const match of text.matchAll(/(!?)\[([^\]]*)\]\(([^)]+)\)/g)) {
     const start = match.index ?? -1;
     if (start < 0) continue;
     const full = match[0];
     const end = start + full.length;
-    if (offsetInLine < start || offsetInLine > end) continue;
+    if (!within(start, end)) continue;
     const href = match[3] ?? "";
     return href.trim();
   }
+
+  // HTML image tag (GitHub-compatible sizing): <img src="..." ...>
+  for (const match of text.matchAll(/<img\b[^>]*>/gi)) {
+    const start = match.index ?? -1;
+    if (start < 0) continue;
+    const raw = match[0];
+    const end = start + raw.length;
+    if (!within(start, end)) continue;
+    const info = parseHtmlImgTag(raw);
+    if (info?.src) return info.src.trim();
+  }
+
+  // Angle-bracket autolinks: <https://...> / <mailto:...>
+  for (const match of text.matchAll(/<((?:https?:\/\/|mailto:)[^>\s]+)>/gi)) {
+    const start = match.index ?? -1;
+    if (start < 0) continue;
+    const full = match[0];
+    const end = start + full.length;
+    if (!within(start, end)) continue;
+    return (match[1] ?? "").trim();
+  }
+
+  // Bare URLs (GitHub-ish): https://...
+  for (const match of text.matchAll(/https?:\/\/[^\s<>()]+/g)) {
+    const start = match.index ?? -1;
+    if (start < 0) continue;
+    const full = match[0];
+    const end = start + full.length;
+    if (!within(start, end)) continue;
+    return trimPunctuation(full);
+  }
+
+  // Plain paths (e.g. docs/file.md, ./file.md, ../img.png, #heading)
+  const token = extractTokenAt();
+  if (!token) return null;
+  if (token.startsWith("#")) return token; // in-document fragment
+  if (/^https?:\/\//i.test(token) || /^mailto:/i.test(token)) return token;
+  // Require a strong "path-like" shape to avoid accidental opens.
+  const looksPathLike =
+    token.startsWith("./") ||
+    token.startsWith("../") ||
+    token.startsWith("/") ||
+    token.includes("/") ||
+    /\.[A-Za-z0-9]{1,6}(?:#.+)?$/.test(token);
+  if (looksPathLike) return token;
+
   return null;
 }
 

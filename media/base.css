@@ -12,6 +12,7 @@
   --quench-accent: #7c3aed;
   --quench-link: color-mix(in srgb, var(--quench-accent) 82%, #fff 18%);
   --quench-link-active: color-mix(in srgb, var(--quench-accent) 62%, #fff 38%);
+  --quench-link-mod-hover: #7dd3fc; /* Ctrl/⌘+hover link hint */
   --quench-muted: color-mix(in srgb, var(--quench-fg) 70%, var(--quench-bg) 30%);
   --quench-code-fg: color-mix(in srgb, var(--quench-fg) 92%, #fff 8%);
   --quench-code-keyword: color-mix(in srgb, var(--quench-accent) 70%, #fff 30%);
@@ -39,6 +40,7 @@ body[data-quench-theme-kind="high-contrast-light"] {
   --quench-accent: #6d28d9;
   --quench-link: color-mix(in srgb, var(--quench-accent) 88%, #000 12%);
   --quench-link-active: color-mix(in srgb, var(--quench-accent) 72%, #000 28%);
+  --quench-link-mod-hover: #0284c7; /* Ctrl/⌘+hover link hint (light) */
   --quench-code-fg: color-mix(in srgb, var(--quench-fg) 96%, #000 4%);
   --quench-code-keyword: color-mix(in srgb, var(--quench-accent) 78%, #000 22%);
   --quench-code-string: color-mix(in srgb, #16a34a 78%, #000 22%);
@@ -239,6 +241,17 @@ body {
 }
 .cm-link:hover {
   color: var(--quench-link-active);
+}
+
+/* Ctrl/⌘+hover link affordance (Obsidian-like) */
+body.quench-mod .cm-link:hover,
+body.quench-mod .md-link:hover,
+body.quench-mod .md-link-destination:hover,
+body.quench-mod .cm-content .tok-link:hover,
+body.quench-mod .cm-content .tok-url:hover {
+  color: var(--quench-link-mod-hover);
+  text-decoration-color: color-mix(in srgb, var(--quench-link-mod-hover) 70%, transparent 30%);
+  cursor: pointer;
 }
 .cm-url {
   color: color-mix(in srgb, var(--quench-link) 55%, var(--quench-fg) 45%);

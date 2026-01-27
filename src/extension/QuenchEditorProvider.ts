@@ -109,6 +109,8 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
   private async computeCssTextForEditor(editor: EditorInstance): Promise<string[]> {
     const globalCss = this.buildGlobalThemeCss();
     const cssText = await editor.cssService.readAllCssText();
+    // Precedence: global overrides first, then workspace/user CSS last.
+    // This keeps workspace CSS as the final authority (local wins).
     return globalCss.length > 0 ? [globalCss, ...cssText] : cssText;
   }
 
@@ -1068,20 +1070,21 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
       label { align-self: center; }
       input[type="text"], select { width: 100%; padding: 6px 8px; }
       .colorRow { display: flex; align-items: center; gap: 8px; }
-      .colorSwatch {
-        width: 18px;
-        height: 18px;
-        border-radius: 4px;
-        border: 1px solid rgba(127,127,127,0.6);
-        background: transparent;
-        cursor: pointer;
-        padding: 0;
-      }
-      .colorText { width: 220px; }
-      .colorPicker { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
-      .row { display: flex; gap: 10px; margin-top: 14px; }
-      button { padding: 7px 10px; }
-      .status { margin-top: 10px; font-size: 12px; }
+	      .colorSwatch {
+	        width: 18px;
+	        height: 18px;
+	        border-radius: 4px;
+	        border: 1px solid rgba(127,127,127,0.6);
+	        background: transparent;
+	        cursor: pointer;
+	        padding: 0;
+	      }
+	      .colorText { width: 220px; }
+	      /* Keep it in-viewport so Chromium's color picker can open reliably. */
+	      .colorPicker { position: fixed; left: 0; top: 0; width: 1px; height: 1px; opacity: 0; }
+	      .row { display: flex; gap: 10px; margin-top: 14px; }
+	      button { padding: 7px 10px; }
+	      .status { margin-top: 10px; font-size: 12px; }
       code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
     </style>
   </head>
@@ -1206,19 +1209,22 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
         }
       }
 
-      function bindColorControl(name) {
-        const textEl = el(name);
-        const swatchEl = el(name + "Swatch");
-        const pickerEl = el(name + "Picker");
-
-        swatchEl.addEventListener("click", () => {
-          const normalized = normalizeHexColor(textEl.value) || "#000000";
-          pickerEl.value = normalized;
-          pickerEl.click();
-        });
-        pickerEl.addEventListener("input", () => {
-          textEl.value = pickerEl.value;
-          syncColorControl(name);
+	      function bindColorControl(name) {
+	        const textEl = el(name);
+	        const swatchEl = el(name + "Swatch");
+	        const pickerEl = el(name + "Picker");
+	
+	        swatchEl.addEventListener("click", () => {
+	          const normalized = normalizeHexColor(textEl.value) || "#000000";
+	          pickerEl.value = normalized;
+	          // Prefer showPicker() when available (Chromium), otherwise fall back to click().
+	          const anyEl = pickerEl;
+	          if (anyEl && typeof anyEl.showPicker === "function") anyEl.showPicker();
+	          else pickerEl.click();
+	        });
+	        pickerEl.addEventListener("input", () => {
+	          textEl.value = pickerEl.value;
+	          syncColorControl(name);
         });
         textEl.addEventListener("input", () => syncColorControl(name));
       }
