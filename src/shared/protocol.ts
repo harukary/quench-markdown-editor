@@ -34,7 +34,11 @@ export type ExtensionToWebviewMessage =
       documentUri: string;
       text: string;
       version: number;
-      themeKind: QuenchThemeKind;
+      /**
+       * Theme kind sent by the extension host.
+       * Optional for backward compatibility with older extension builds.
+       */
+      themeKind?: QuenchThemeKind;
       settings: QuenchSettings;
       cssText: string[];
     }
@@ -313,7 +317,7 @@ export function assertExtensionToWebviewMessage(value: unknown): ExtensionToWebv
       assertString(value.documentUri, "INIT.documentUri");
       assertString(value.text, "INIT.text");
       assertNumber(value.version, "INIT.version");
-      assertString(value.themeKind, "INIT.themeKind");
+      if (typeof value.themeKind !== "undefined") assertString(value.themeKind, "INIT.themeKind");
       if (!isRecord(value.settings)) throw new Error("Invalid INIT.settings");
       if (!Array.isArray(value.cssText) || !value.cssText.every((s) => typeof s === "string")) throw new Error("Invalid INIT.cssText");
       return value as ExtensionToWebviewMessage;

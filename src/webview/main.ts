@@ -63,8 +63,29 @@ const pendingResourceRequestIds = new Map<string, string>(); // requestId -> cac
 
 const forceRedrawEffect = StateEffect.define<void>();
 
-function applyThemeKind(kind: string) {
-  document.body.dataset.quenchThemeKind = kind;
+function inferThemeKindFromDom(): string {
+  const explicit = document.body.dataset.quenchThemeKind;
+  if (explicit) return explicit;
+
+  const vscodeKind = document.body.getAttribute("data-vscode-theme-kind") ?? document.body.dataset.vscodeThemeKind ?? "";
+  switch (vscodeKind) {
+    case "vscode-light":
+      return "light";
+    case "vscode-dark":
+      return "dark";
+    case "vscode-high-contrast":
+      return "high-contrast";
+    case "vscode-high-contrast-light":
+      return "high-contrast-light";
+    default:
+      return "";
+  }
+}
+
+function applyThemeKind(kind?: string) {
+  const next = kind && kind.length > 0 ? kind : inferThemeKindFromDom();
+  if (!next) return;
+  document.body.dataset.quenchThemeKind = next;
 }
 
 function baseVersionForNextEdit(): number {

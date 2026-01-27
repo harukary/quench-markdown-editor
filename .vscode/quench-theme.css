@@ -1,0 +1,33 @@
+/* Quench Theme CSS (workspace)
+
+  Path: .vscode/quench-theme.css
+  This file is a "Simple Theme" style template for Quench.
+  If quench.css.reloadOnSave is enabled, saving this file auto-reloads the Webview CSS.
+
+  Target: Quench Webview (#quench-user-css)
+*/
+
+:root {
+  /* Accent (Obsidian-ish purple) */
+  --quench-accent: #22ef41;
+
+  /* Links */
+  --quench-link: color-mix(in srgb, var(--quench-accent) 82%, #fff 18%);
+  --quench-link-active: color-mix(in srgb, var(--quench-accent) 62%, #fff 38%);
+
+  /* Muted/syntax (dim markdown markers) */
+  --quench-muted: color-mix(in srgb, var(--vscode-editor-foreground) 70%, var(--vscode-editor-background) 30%);
+
+  /* Cursor (theme follow; set to #fff to force white) */
+  --quench-cursor: var(--vscode-editorCursor-foreground);
+
+  /* Inline code + code tokens */
+  --quench-code-fg: color-mix(in srgb, var(--vscode-editor-foreground) 92%, #fff 8%);
+  --quench-code-keyword: color-mix(in srgb, var(--quench-accent) 70%, #fff 30%);
+  --quench-code-string: color-mix(in srgb, #22c55e 70%, #fff 30%);
+  --quench-code-number: color-mix(in srgb, #f59e0b 70%, #fff 30%);
+  --quench-code-comment: var(--quench-muted);
+}
+
+/* Example: customize heading color */
+/* .md-heading { color: var(--quench-accent); } */
