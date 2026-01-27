@@ -1067,6 +1067,18 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
       .grid { display: grid; grid-template-columns: 220px 1fr; gap: 10px 16px; margin-top: 14px; }
       label { align-self: center; }
       input[type="text"], select { width: 100%; padding: 6px 8px; }
+      .colorRow { display: flex; align-items: center; gap: 8px; }
+      .colorSwatch {
+        width: 18px;
+        height: 18px;
+        border-radius: 4px;
+        border: 1px solid rgba(127,127,127,0.6);
+        background: transparent;
+        cursor: pointer;
+        padding: 0;
+      }
+      .colorText { width: 220px; }
+      .colorPicker { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
       .row { display: flex; gap: 10px; margin-top: 14px; }
       button { padding: 7px 10px; }
       .status { margin-top: 10px; font-size: 12px; }
@@ -1083,13 +1095,29 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
     <div class="grid" style="margin-top: 18px;">
       <div><strong>Theme</strong></div><div></div>
       <label for="accentDark">Accent (dark)</label>
-      <input id="accentDark" type="text" placeholder="e.g. #7c3aed (empty = inherit)" />
+      <div class="colorRow">
+        <button class="colorSwatch" id="accentDarkSwatch" aria-label="Pick color"></button>
+        <input class="colorText" id="accentDark" type="text" placeholder="e.g. #7c3aed (empty = inherit)" />
+        <input class="colorPicker" id="accentDarkPicker" type="color" />
+      </div>
       <label for="accentLight">Accent (light)</label>
-      <input id="accentLight" type="text" placeholder="e.g. #6d28d9 (empty = inherit)" />
+      <div class="colorRow">
+        <button class="colorSwatch" id="accentLightSwatch" aria-label="Pick color"></button>
+        <input class="colorText" id="accentLight" type="text" placeholder="e.g. #6d28d9 (empty = inherit)" />
+        <input class="colorPicker" id="accentLightPicker" type="color" />
+      </div>
       <label for="cursorDark">Cursor (dark)</label>
-      <input id="cursorDark" type="text" placeholder="e.g. #ffffff (empty = inherit)" />
+      <div class="colorRow">
+        <button class="colorSwatch" id="cursorDarkSwatch" aria-label="Pick color"></button>
+        <input class="colorText" id="cursorDark" type="text" placeholder="e.g. #ffffff (empty = inherit)" />
+        <input class="colorPicker" id="cursorDarkPicker" type="color" />
+      </div>
       <label for="cursorLight">Cursor (light)</label>
-      <input id="cursorLight" type="text" placeholder="e.g. #000000 (empty = inherit)" />
+      <div class="colorRow">
+        <button class="colorSwatch" id="cursorLightSwatch" aria-label="Pick color"></button>
+        <input class="colorText" id="cursorLight" type="text" placeholder="e.g. #000000 (empty = inherit)" />
+        <input class="colorPicker" id="cursorLightPicker" type="color" />
+      </div>
 
       <div><strong>Editor</strong></div><div></div>
       <label for="lineWrapping">Line wrapping</label>
@@ -1153,6 +1181,47 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
       function setStatus(text) { status.textContent = text; }
       function v(id) { return el(id).value.trim(); }
       function setV(id, value) { el(id).value = value ?? ""; }
+
+      function normalizeHexColor(input) {
+        const s = (input || "").trim();
+        if (!s) return "";
+        // Support: #rgb, #rrggbb
+        if (/^#[0-9a-fA-F]{3}$/.test(s)) {
+          return "#" + s[1] + s[1] + s[2] + s[2] + s[3] + s[3];
+        }
+        if (/^#[0-9a-fA-F]{6}$/.test(s)) return s.toLowerCase();
+        return "";
+      }
+
+      function syncColorControl(name) {
+        const textEl = el(name);
+        const swatchEl = el(name + "Swatch");
+        const pickerEl = el(name + "Picker");
+        const normalized = normalizeHexColor(textEl.value);
+        if (normalized) {
+          swatchEl.style.background = normalized;
+          pickerEl.value = normalized;
+        } else {
+          swatchEl.style.background = "transparent";
+        }
+      }
+
+      function bindColorControl(name) {
+        const textEl = el(name);
+        const swatchEl = el(name + "Swatch");
+        const pickerEl = el(name + "Picker");
+
+        swatchEl.addEventListener("click", () => {
+          const normalized = normalizeHexColor(textEl.value) || "#000000";
+          pickerEl.value = normalized;
+          pickerEl.click();
+        });
+        pickerEl.addEventListener("input", () => {
+          textEl.value = pickerEl.value;
+          syncColorControl(name);
+        });
+        textEl.addEventListener("input", () => syncColorControl(name));
+      }
 
       function setTri(id, value) {
         if (typeof value === "boolean") el(id).value = value ? "true" : "false";
@@ -1223,6 +1292,10 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
           setV("accentLight", t.accentLight);
           setV("cursorDark", t.cursorDark);
           setV("cursorLight", t.cursorLight);
+          syncColorControl("accentDark");
+          syncColorControl("accentLight");
+          syncColorControl("cursorDark");
+          syncColorControl("cursorLight");
 
           setTri("lineWrapping", s.editor && s.editor.lineWrapping);
           setV("syntaxVisibility", s.syntaxVisibility || "");
@@ -1248,6 +1321,11 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
       el("reload").addEventListener("click", () => {
         vscode.postMessage({ type: "SETTINGS_UI_READY" });
       });
+
+      bindColorControl("accentDark");
+      bindColorControl("accentLight");
+      bindColorControl("cursorDark");
+      bindColorControl("cursorLight");
 
       vscode.postMessage({ type: "SETTINGS_UI_READY" });
     </script>
