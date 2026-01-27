@@ -25,6 +25,12 @@ body {
   height: 100%;
 }
 
+/* Cursor visibility: some themes provide a low-contrast cursor in Webviews.
+   In dark theme, default to white for better visibility (users can override via workspace CSS). */
+body.vscode-dark {
+  --quench-cursor: #ffffff;
+}
+
 body {
   margin: 0;
   padding: 0;
@@ -126,6 +132,7 @@ body {
 }
 .cm-cursor,
 .cm-dropCursor {
+  border-left-width: 2px !important;
   border-left-color: var(--quench-cursor) !important;
 }
 
