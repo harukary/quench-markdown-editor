@@ -52,7 +52,11 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
       })
     );
     void this.workspaceIndex.rebuild();
-    void this.reloadGlobalOverrides();
+    void this.reloadGlobalOverrides().then(() => {
+      // If any editor opened before global overrides finished loading, update it now.
+      void this.reloadCssForAllEditors();
+      this.broadcastSettingsUpdated();
+    });
   }
 
   dispose() {
@@ -103,15 +107,28 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
       lines.push("}");
     }
 
+    // Ensure the cursor override actually takes effect even if workspace CSS
+    // overrides CodeMirror cursor styling (caret-color / border-left-color).
+    if (t.cursorDark || t.cursorLight) {
+      lines.push("");
+      lines.push("/* Cursor override */");
+      lines.push(".cm-content { caret-color: var(--quench-cursor) !important; }");
+      lines.push(".cm-cursor, .cm-dropCursor { border-left-color: var(--quench-cursor) !important; }");
+    }
+
     return lines.join("\n");
   }
 
   private async computeCssTextForEditor(editor: EditorInstance): Promise<string[]> {
     const globalCss = this.buildGlobalThemeCss();
     const cssText = await editor.cssService.readAllCssText();
-    // Precedence: global overrides first, then workspace/user CSS last.
-    // This keeps workspace CSS as the final authority (local wins).
-    return globalCss.length > 0 ? [globalCss, ...cssText] : cssText;
+    // Precedence (later wins within #quench-user-css):
+    // - Workspace/user CSS (quench.css.files)
+    // - Global theme overrides (this UI)
+    //
+    // Rationale: The Settings UI is the primary "theme override" surface.
+    // Users can still override it by clearing values (inherit) or not using global overrides.
+    return globalCss.length > 0 ? [...cssText, globalCss] : cssText;
   }
 
   private broadcastSettingsUpdated() {
@@ -602,6 +619,7 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
     const cssService = new CssService(document, panel, this.context);
     const editor: EditorInstance = { panel, document, cssService, disposables: [], pendingApplyQueue: [] };
     this.trackEditor(editor);
+    if (panel.active) this.lastActiveEditor = editor;
 
     let gotAnyWebviewMessage = false;
     const bootTimeout = setTimeout(() => {
@@ -1092,7 +1110,8 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
     <h1>Quench Settings</h1>
     <div class="muted">
       Global settings file: <code id="filePath">(loading...)</code><br />
-      These overrides take precedence over VS Code settings.
+      These overrides take precedence over VS Code settings.<br />
+      Theme overrides are applied after <code>quench.css.files</code>.
     </div>
 
     <div class="grid" style="margin-top: 18px;">

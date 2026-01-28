@@ -44,6 +44,12 @@ npm run build
 - `quench.css.files`: List of workspace-relative CSS file paths
 - `quench.css.reloadOnSave`: Auto re-inject CSS on save (helper; watcher is primary)
 
+## Global Settings (UI)
+
+Run `Quench: Open Settings` to edit global overrides stored under VS Code `globalStorage`.
+
+- Theme overrides from this UI are applied after `quench.css.files` (later wins inside the Webview).
+
 See `docs/master.md` for more details.
 
 ## Support

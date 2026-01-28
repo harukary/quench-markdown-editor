@@ -63,6 +63,7 @@ body {
   color: var(--quench-fg);
   font-family: var(--quench-font);
   font-size: var(--quench-font-size);
+  font-weight: normal;
 }
 
 #root {
@@ -154,6 +155,7 @@ body {
 /* Cursor visibility (VSCode theme) */
 .cm-content {
   caret-color: var(--quench-cursor);
+  font-weight: normal;
 }
 .cm-cursor,
 .cm-dropCursor {
@@ -212,6 +214,14 @@ body {
   border-radius: 6px;
   padding: 0.05em 0.35em;
   color: var(--quench-code-fg);
+}
+
+.md-bold {
+  font-weight: 700;
+}
+
+.md-italic {
+  font-style: italic;
 }
 
 .md-bullet {
@@ -357,6 +367,60 @@ body.quench-mod .cm-content .tok-url:hover {
 }
 .cm-line.md-table-zebra {
   background: color-mix(in srgb, var(--quench-bg) 94%, #fff 6%);
+}
+
+.md-table-widget {
+  margin: 6px 0 10px;
+}
+
+.md-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.95em;
+  border: 1px solid color-mix(in srgb, var(--quench-border) 70%, transparent 30%);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.md-table thead th {
+  background: color-mix(in srgb, var(--quench-bg) 88%, var(--quench-accent) 12%);
+  font-weight: 650;
+}
+
+.md-table th,
+.md-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--quench-border) 65%, transparent 35%);
+  border-right: 1px solid color-mix(in srgb, var(--quench-border) 55%, transparent 45%);
+  vertical-align: top;
+  white-space: normal;
+}
+
+.md-table th:last-child,
+.md-table td:last-child {
+  border-right: none;
+}
+
+.md-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.md-table tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--quench-bg) 94%, #fff 6%);
+}
+
+.md-table th[data-align="left"],
+.md-table td[data-align="left"] {
+  text-align: left;
+}
+.md-table th[data-align="center"],
+.md-table td[data-align="center"] {
+  text-align: center;
+}
+.md-table th[data-align="right"],
+.md-table td[data-align="right"] {
+  text-align: right;
 }
 
 /* Fenced code block (Obsidian-ish) */

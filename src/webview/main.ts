@@ -65,6 +65,142 @@ const pendingResourceRequestIds = new Map<string, string>(); // requestId -> cac
 const forceRedrawEffect = StateEffect.define<void>();
 const lineWrappingCompartment = new Compartment();
 
+type TableAlign = "left" | "center" | "right";
+
+type ParsedGfmTable = {
+  header: string[];
+  aligns: TableAlign[];
+  rows: string[][];
+};
+
+function splitGfmTableRow(line: string): string[] {
+  // Minimal parser:
+  // - supports escaping pipes with \|
+  // - ignores pipes inside inline code spans delimited by single backticks
+  // - trims cells, keeps inner whitespace
+  let s = line.trim();
+  if (s.startsWith("|")) s = s.slice(1);
+  if (s.endsWith("|")) s = s.slice(0, -1);
+
+  const out: string[] = [];
+  let buf = "";
+  let inCode = false;
+  let escaped = false;
+
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i]!;
+    if (escaped) {
+      buf += ch;
+      escaped = false;
+      continue;
+    }
+    if (ch === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (ch === "`") {
+      inCode = !inCode;
+      buf += ch;
+      continue;
+    }
+    if (ch === "|" && !inCode) {
+      out.push(buf.trim());
+      buf = "";
+      continue;
+    }
+    buf += ch;
+  }
+  out.push(buf.trim());
+  return out;
+}
+
+function parseAlignCells(alignLineText: string): TableAlign[] | null {
+  const raw = splitGfmTableRow(alignLineText).map((c) => c.replace(/\s+/g, ""));
+  if (raw.length === 0) return null;
+  const alignPattern = /^:?-{3,}:?$/;
+  if (!raw.every((c) => alignPattern.test(c))) return null;
+  return raw.map((c) => {
+    const left = c.startsWith(":");
+    const right = c.endsWith(":");
+    if (left && right) return "center";
+    if (right) return "right";
+    return "left";
+  });
+}
+
+function parseGfmTable(doc: Text, range: ParsedTableRange): ParsedGfmTable | null {
+  const headerLine = doc.line(range.headerLineNo);
+  const alignLine = doc.line(range.alignLineNo);
+
+  if (!headerLine.text.includes("|") || !alignLine.text.includes("|")) return null;
+  const aligns = parseAlignCells(alignLine.text);
+  if (!aligns) return null;
+
+  const header = splitGfmTableRow(headerLine.text);
+  const colCount = Math.max(header.length, aligns.length);
+
+  const normRow = (cells: string[]): string[] => {
+    const next = cells.slice(0, colCount);
+    while (next.length < colCount) next.push("");
+    return next;
+  };
+
+  const rows: string[][] = [];
+  for (let ln = range.alignLineNo + 1; ln <= range.endLineNo; ln++) {
+    const line = doc.line(ln);
+    rows.push(normRow(splitGfmTableRow(line.text)));
+  }
+
+  const headerNorm = normRow(header);
+  const alignsNorm = aligns.slice(0, colCount);
+  while (alignsNorm.length < colCount) alignsNorm.push("left");
+
+  return { header: headerNorm, aligns: alignsNorm, rows };
+}
+
+class TableWidget extends WidgetType {
+  constructor(private readonly table: ParsedGfmTable) {
+    super();
+  }
+  eq(other: TableWidget) {
+    return JSON.stringify(this.table) === JSON.stringify(other.table);
+  }
+  toDOM() {
+    const wrap = document.createElement("div");
+    wrap.className = "md-table-widget";
+
+    const tableEl = document.createElement("table");
+    tableEl.className = "md-table";
+
+    const thead = document.createElement("thead");
+    const trh = document.createElement("tr");
+    for (let i = 0; i < this.table.header.length; i++) {
+      const th = document.createElement("th");
+      th.textContent = this.table.header[i] ?? "";
+      th.dataset.align = this.table.aligns[i] ?? "left";
+      trh.appendChild(th);
+    }
+    thead.appendChild(trh);
+    tableEl.appendChild(thead);
+
+    const tbody = document.createElement("tbody");
+    for (const row of this.table.rows) {
+      const tr = document.createElement("tr");
+      for (let i = 0; i < this.table.header.length; i++) {
+        const td = document.createElement("td");
+        td.textContent = row[i] ?? "";
+        td.dataset.align = this.table.aligns[i] ?? "left";
+        tr.appendChild(td);
+      }
+      tbody.appendChild(tr);
+    }
+    tableEl.appendChild(tbody);
+
+    wrap.appendChild(tableEl);
+    return wrap;
+  }
+}
+
 function inferThemeKindFromDom(): string {
   const explicit = document.body.dataset.quenchThemeKind;
   if (explicit) return explicit;
@@ -585,26 +721,19 @@ function livePreviewPlugin() {
                 const tableTo = endLine.to;
 
                 if (!selectionOverlaps(tableFrom, Math.min(view.state.doc.length, tableTo + 1))) {
-                  for (let ln = table.headerLineNo; ln <= table.endLineNo; ln++) {
-                    const l = view.state.doc.line(ln);
-                    const cls =
-                      ln === table.headerLineNo
-                        ? "md-table-row md-table-header md-table-first"
-                        : ln === table.alignLineNo
-                          ? "md-table-row md-table-sep"
-                          : (() => {
-                              const rowIndex = ln - (table.alignLineNo + 1);
-                              const zebra = rowIndex % 2 === 1 ? " md-table-zebra" : "";
-                              const last = ln === table.endLineNo ? " md-table-last" : "";
-                              return `md-table-row md-table-body${zebra}${last}`;
-                            })();
-                    builder.push(Decoration.line({ class: cls }).range(l.from));
-
-                    // パイプは薄く（視認性のため）
-                    for (let i = 0; i < l.text.length; i++) {
-                      if (l.text[i] !== "|") continue;
-                      dimSyntax(l.from + i, l.from + i + 1);
+                  const parsed = parseGfmTable(view.state.doc, table);
+                  if (parsed) {
+                    // Hide each line content (keep newlines) and render as a block widget.
+                    for (let ln = table.headerLineNo; ln <= table.endLineNo; ln++) {
+                      const l = view.state.doc.line(ln);
+                      builder.push(Decoration.replace({}).range(l.from, l.to));
                     }
+                    builder.push(
+                      Decoration.widget({
+                        widget: new TableWidget(parsed),
+                        side: 1
+                      }).range(headerLine.from)
+                    );
                   }
 
                   pos = endLine.to + 1;
