@@ -78,6 +78,7 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
         ...base.editor,
         ...(o.editor ?? {})
       },
+      keybindings: o.keybindings ?? base.keybindings,
       syntaxVisibility: o.preview?.syntaxVisibility ?? base.syntaxVisibility,
       previewOnHover: o.links?.previewOnHover ?? base.previewOnHover,
       security: {
@@ -97,24 +98,26 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
     lines.push(":root {");
     if (t.accentDark) lines.push(`  --quench-accent: ${t.accentDark};`);
     if (t.cursorDark) lines.push(`  --quench-cursor: ${t.cursorDark};`);
+    if (t.linkModHoverDark) lines.push(`  --quench-link-mod-hover: ${t.linkModHoverDark};`);
     lines.push("}");
 
-    if (t.accentLight || t.cursorLight) {
+    if (t.accentLight || t.cursorLight || t.linkModHoverLight) {
       lines.push('body[data-quench-theme-kind="light"],');
       lines.push('body[data-quench-theme-kind="high-contrast-light"] {');
       if (t.accentLight) lines.push(`  --quench-accent: ${t.accentLight};`);
       if (t.cursorLight) lines.push(`  --quench-cursor: ${t.cursorLight};`);
+      if (t.linkModHoverLight) lines.push(`  --quench-link-mod-hover: ${t.linkModHoverLight};`);
       lines.push("}");
     }
 
     // Ensure the cursor override actually takes effect even if workspace CSS
     // overrides CodeMirror cursor styling (caret-color / border-left-color).
-    if (t.cursorDark || t.cursorLight) {
-      lines.push("");
-      lines.push("/* Cursor override */");
-      lines.push(".cm-content { caret-color: var(--quench-cursor) !important; }");
-      lines.push(".cm-cursor, .cm-dropCursor { border-left-color: var(--quench-cursor) !important; }");
-    }
+      if (t.cursorDark || t.cursorLight) {
+        lines.push("");
+        lines.push("/* Cursor override */");
+        lines.push(".cm-content { caret-color: var(--quench-cursor) !important; }");
+        lines.push(".cm-cursor, .cm-dropCursor { border-left-color: var(--quench-cursor) !important; }");
+      }
 
     return lines.join("\n");
   }
@@ -252,7 +255,9 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
           accentDark: overrides.theme?.accentDark ?? "#7c3aed",
           accentLight: overrides.theme?.accentLight ?? "#6d28d9",
           cursorDark: overrides.theme?.cursorDark ?? "#ffffff",
-          cursorLight: overrides.theme?.cursorLight ?? ""
+          cursorLight: overrides.theme?.cursorLight ?? "",
+          linkModHoverDark: overrides.theme?.linkModHoverDark ?? "#7dd3fc",
+          linkModHoverLight: overrides.theme?.linkModHoverLight ?? "#0284c7"
         };
         panel.webview.postMessage({
           type: "SETTINGS_UI_INIT",
@@ -1140,6 +1145,18 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
         <input class="colorText" id="cursorLight" type="text" placeholder="e.g. #000000 (empty = inherit)" />
         <input class="colorPicker" id="cursorLightPicker" type="color" />
       </div>
+      <label for="linkModHoverDark">Link Ctrl/⌘+Hover (dark)</label>
+      <div class="colorRow">
+        <button class="colorSwatch" id="linkModHoverDarkSwatch" aria-label="Pick color"></button>
+        <input class="colorText" id="linkModHoverDark" type="text" placeholder="e.g. #7dd3fc (empty = inherit)" />
+        <input class="colorPicker" id="linkModHoverDarkPicker" type="color" />
+      </div>
+      <label for="linkModHoverLight">Link Ctrl/⌘+Hover (light)</label>
+      <div class="colorRow">
+        <button class="colorSwatch" id="linkModHoverLightSwatch" aria-label="Pick color"></button>
+        <input class="colorText" id="linkModHoverLight" type="text" placeholder="e.g. #0284c7 (empty = inherit)" />
+        <input class="colorPicker" id="linkModHoverLightPicker" type="color" />
+      </div>
 
       <div><strong>Editor</strong></div><div></div>
       <label for="lineWrapping">Line wrapping</label>
@@ -1165,6 +1182,138 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
         <option value="true">On</option>
         <option value="false">Off</option>
       </select>
+
+      <div><strong>Keybindings</strong></div><div></div>
+      <div class="muted" style="grid-column: 1 / -1;">
+        These keybindings apply only inside Quench (webview). Use CodeMirror key names (e.g. <code>Mod-b</code>, <code>Shift-Mod-l</code>).<br />
+        Empty = inherit Quench defaults. Check "Disable" to remove a default binding.
+      </div>
+      <label for="kb_toggleHeading1">Heading H1</label>
+      <div class="colorRow">
+        <input class="colorText" id="kb_toggleHeading1" type="text" placeholder="e.g. Mod-1" />
+        <label style="display:flex; align-items:center; gap:6px; font-size:12px;">
+          <input type="checkbox" id="kb_disable_toggleHeading1" /> Disable
+        </label>
+      </div>
+      <label for="kb_toggleHeading2">Heading H2</label>
+      <div class="colorRow">
+        <input class="colorText" id="kb_toggleHeading2" type="text" placeholder="e.g. Mod-2" />
+        <label style="display:flex; align-items:center; gap:6px; font-size:12px;">
+          <input type="checkbox" id="kb_disable_toggleHeading2" /> Disable
+        </label>
+      </div>
+      <label for="kb_toggleHeading3">Heading H3</label>
+      <div class="colorRow">
+        <input class="colorText" id="kb_toggleHeading3" type="text" placeholder="e.g. Mod-3" />
+        <label style="display:flex; align-items:center; gap:6px; font-size:12px;">
+          <input type="checkbox" id="kb_disable_toggleHeading3" /> Disable
+        </label>
+      </div>
+      <label for="kb_toggleHeading4">Heading H4</label>
+      <div class="colorRow">
+        <input class="colorText" id="kb_toggleHeading4" type="text" placeholder="e.g. Mod-4" />
+        <label style="display:flex; align-items:center; gap:6px; font-size:12px;">
+          <input type="checkbox" id="kb_disable_toggleHeading4" /> Disable
+        </label>
+      </div>
+      <label for="kb_toggleHeading5">Heading H5</label>
+      <div class="colorRow">
+        <input class="colorText" id="kb_toggleHeading5" type="text" placeholder="e.g. Mod-5" />
+        <label style="display:flex; align-items:center; gap:6px; font-size:12px;">
+          <input type="checkbox" id="kb_disable_toggleHeading5" /> Disable
+        </label>
+      </div>
+      <label for="kb_toggleHeading6">Heading H6</label>
+      <div class="colorRow">
+        <input class="colorText" id="kb_toggleHeading6" type="text" placeholder="e.g. Mod-6" />
+        <label style="display:flex; align-items:center; gap:6px; font-size:12px;">
+          <input type="checkbox" id="kb_disable_toggleHeading6" /> Disable
+        </label>
+      </div>
+      <label for="kb_toggleBullets">Toggle bullets</label>
+      <div class="colorRow">
+        <input class="colorText" id="kb_toggleBullets" type="text" placeholder="e.g. Mod-'" />
+        <label style="display:flex; align-items:center; gap:6px; font-size:12px;">
+          <input type="checkbox" id="kb_disable_toggleBullets" /> Disable
+        </label>
+      </div>
+      <label for="kb_toggleCheckboxes">Toggle checkboxes</label>
+      <div class="colorRow">
+        <input class="colorText" id="kb_toggleCheckboxes" type="text" placeholder="e.g. Mod-l, Shift-Mod-'" />
+        <label style="display:flex; align-items:center; gap:6px; font-size:12px;">
+          <input type="checkbox" id="kb_disable_toggleCheckboxes" /> Disable
+        </label>
+      </div>
+      <label for="kb_selectNextOccurrence">Add selection to next match</label>
+      <div class="colorRow">
+        <input class="colorText" id="kb_selectNextOccurrence" type="text" placeholder="e.g. Mod-d" />
+        <label style="display:flex; align-items:center; gap:6px; font-size:12px;">
+          <input type="checkbox" id="kb_disable_selectNextOccurrence" /> Disable
+        </label>
+      </div>
+      <label for="kb_selectAllOccurrences">Select all matches</label>
+      <div class="colorRow">
+        <input class="colorText" id="kb_selectAllOccurrences" type="text" placeholder="e.g. Shift-Mod-l" />
+        <label style="display:flex; align-items:center; gap:6px; font-size:12px;">
+          <input type="checkbox" id="kb_disable_selectAllOccurrences" /> Disable
+        </label>
+      </div>
+      <label for="kb_moveWordLeft">Move word left</label>
+      <div class="colorRow">
+        <input class="colorText" id="kb_moveWordLeft" type="text" placeholder="e.g. Mod-ArrowLeft" />
+        <label style="display:flex; align-items:center; gap:6px; font-size:12px;">
+          <input type="checkbox" id="kb_disable_moveWordLeft" /> Disable
+        </label>
+      </div>
+      <label for="kb_moveWordLeftSelect">Select word left</label>
+      <div class="colorRow">
+        <input class="colorText" id="kb_moveWordLeftSelect" type="text" placeholder="e.g. Shift-Mod-ArrowLeft" />
+        <label style="display:flex; align-items:center; gap:6px; font-size:12px;">
+          <input type="checkbox" id="kb_disable_moveWordLeftSelect" /> Disable
+        </label>
+      </div>
+      <label for="kb_moveWordRight">Move word right</label>
+      <div class="colorRow">
+        <input class="colorText" id="kb_moveWordRight" type="text" placeholder="e.g. Mod-ArrowRight" />
+        <label style="display:flex; align-items:center; gap:6px; font-size:12px;">
+          <input type="checkbox" id="kb_disable_moveWordRight" /> Disable
+        </label>
+      </div>
+      <label for="kb_moveWordRightSelect">Select word right</label>
+      <div class="colorRow">
+        <input class="colorText" id="kb_moveWordRightSelect" type="text" placeholder="e.g. Shift-Mod-ArrowRight" />
+        <label style="display:flex; align-items:center; gap:6px; font-size:12px;">
+          <input type="checkbox" id="kb_disable_moveWordRightSelect" /> Disable
+        </label>
+      </div>
+      <label for="kb_moveLineStart">Move to line start</label>
+      <div class="colorRow">
+        <input class="colorText" id="kb_moveLineStart" type="text" placeholder="e.g. Alt-ArrowLeft" />
+        <label style="display:flex; align-items:center; gap:6px; font-size:12px;">
+          <input type="checkbox" id="kb_disable_moveLineStart" /> Disable
+        </label>
+      </div>
+      <label for="kb_moveLineStartSelect">Select to line start</label>
+      <div class="colorRow">
+        <input class="colorText" id="kb_moveLineStartSelect" type="text" placeholder="e.g. Shift-Alt-ArrowLeft" />
+        <label style="display:flex; align-items:center; gap:6px; font-size:12px;">
+          <input type="checkbox" id="kb_disable_moveLineStartSelect" /> Disable
+        </label>
+      </div>
+      <label for="kb_moveLineEnd">Move to line end</label>
+      <div class="colorRow">
+        <input class="colorText" id="kb_moveLineEnd" type="text" placeholder="e.g. Alt-ArrowRight" />
+        <label style="display:flex; align-items:center; gap:6px; font-size:12px;">
+          <input type="checkbox" id="kb_disable_moveLineEnd" /> Disable
+        </label>
+      </div>
+      <label for="kb_moveLineEndSelect">Select to line end</label>
+      <div class="colorRow">
+        <input class="colorText" id="kb_moveLineEndSelect" type="text" placeholder="e.g. Shift-Alt-ArrowRight" />
+        <label style="display:flex; align-items:center; gap:6px; font-size:12px;">
+          <input type="checkbox" id="kb_disable_moveLineEndSelect" /> Disable
+        </label>
+      </div>
 
       <div><strong>Security</strong></div><div></div>
       <label for="allowExternalImages">Allow external images</label>
@@ -1248,19 +1397,144 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
         textEl.addEventListener("input", () => syncColorControl(name));
       }
 
-      function setTri(id, value) {
-        if (typeof value === "boolean") el(id).value = value ? "true" : "false";
-        else el(id).value = "";
-      }
+	      function setTri(id, value) {
+	        if (typeof value === "boolean") el(id).value = value ? "true" : "false";
+	        else el(id).value = "";
+	      }
 
-      function buildOverrides() {
-        const overrides = {};
-        const theme = {};
-        if (v("accentDark")) theme.accentDark = v("accentDark");
-        if (v("accentLight")) theme.accentLight = v("accentLight");
-        if (v("cursorDark")) theme.cursorDark = v("cursorDark");
-        if (v("cursorLight")) theme.cursorLight = v("cursorLight");
-        if (Object.keys(theme).length) overrides.theme = theme;
+	      const KB_ACTIONS = [
+	        "toggleHeading1",
+	        "toggleHeading2",
+	        "toggleHeading3",
+	        "toggleHeading4",
+	        "toggleHeading5",
+	        "toggleHeading6",
+	        "toggleBullets",
+	        "toggleCheckboxes",
+	        "selectNextOccurrence",
+	        "selectAllOccurrences",
+	        "moveWordLeft",
+	        "moveWordLeftSelect",
+	        "moveWordRight",
+	        "moveWordRightSelect",
+	        "moveLineStart",
+	        "moveLineStartSelect",
+	        "moveLineEnd",
+	        "moveLineEndSelect"
+	      ];
+
+	      function parseKeys(s) {
+	        const raw = (s || "").trim();
+	        if (!raw) return [];
+	        return raw
+	          .split(",")
+	          .map((x) => x.trim())
+	          .filter((x) => x.length > 0);
+	      }
+
+	      function isKbInputId(id) {
+	        return typeof id === "string" && id.startsWith("kb_") && !id.startsWith("kb_disable_");
+	      }
+
+	      function toCodeMirrorKey(e) {
+	        const mods = [];
+	        // CodeMirror's "Mod" maps to Cmd on macOS, Ctrl on others.
+	        if (e.metaKey || e.ctrlKey) mods.push("Mod");
+	        if (e.shiftKey) mods.push("Shift");
+	        if (e.altKey) mods.push("Alt");
+
+	        const key = e.key;
+	        const code = e.code;
+
+	        // Ignore pure modifier presses.
+	        if (key === "Shift" || key === "Control" || key === "Meta" || key === "Alt") return null;
+
+	        // Normalize special keys
+	        const special = {
+	          ArrowLeft: "ArrowLeft",
+	          ArrowRight: "ArrowRight",
+	          ArrowUp: "ArrowUp",
+	          ArrowDown: "ArrowDown",
+	          Enter: "Enter",
+	          Escape: "Escape",
+	          Backspace: "Backspace",
+	          Delete: "Delete",
+	          Tab: "Tab",
+	          Home: "Home",
+	          End: "End",
+	          PageUp: "PageUp",
+	          PageDown: "PageDown",
+	          Spacebar: "Space",
+	          " ": "Space"
+	        };
+	        if (special[key]) return mods.concat([special[key]]).join("-");
+
+	        // For punctuation, e.key can be "Dead" depending on IME/layout; use e.code mapping then.
+		        const codeMap = {
+		          Quote: "'",
+		          Backquote: "\`",
+		          Minus: "-",
+		          Equal: "=",
+	          BracketLeft: "[",
+	          BracketRight: "]",
+	          Backslash: "\\\\",
+	          Semicolon: ";",
+	          Comma: ",",
+	          Period: ".",
+	          Slash: "/"
+	        };
+
+	        let base = key;
+	        if (base === "Dead" && codeMap[code]) base = codeMap[code];
+	        if (codeMap[code] && (base === undefined || base === "Dead")) base = codeMap[code];
+
+	        // Letters should be lower-case in CodeMirror key names (e.g. Mod-l)
+	        if (typeof base === "string" && base.length === 1 && /[A-Za-z]/.test(base)) base = base.toLowerCase();
+
+	        // Digits are ok as-is.
+	        if (!base || typeof base !== "string") return null;
+
+	        // If no modifier and base is a printable character, don't capture (allow manual typing).
+	        if (mods.length === 0 && base.length === 1 && base !== "Space") return null;
+
+	        return mods.concat([base]).join("-");
+	      }
+
+	      function attachKeyCapture() {
+	        document.addEventListener(
+	          "keydown",
+	          (e) => {
+	            const t = e.target;
+	            if (!(t instanceof HTMLInputElement)) return;
+	            if (!isKbInputId(t.id)) return;
+
+	            // Allow tab navigation.
+	            if (e.key === "Tab") return;
+
+	            const cmKey = toCodeMirrorKey(e);
+	            if (!cmKey) return;
+
+	            e.preventDefault();
+	            e.stopPropagation();
+	            t.value = cmKey;
+	            const actionId = t.id.slice("kb_".length);
+	            const disableEl = el("kb_disable_" + actionId);
+	            if (disableEl instanceof HTMLInputElement) disableEl.checked = false;
+	          },
+	          true
+	        );
+	      }
+
+	      function buildOverrides() {
+	        const overrides = {};
+	        const theme = {};
+	        if (v("accentDark")) theme.accentDark = v("accentDark");
+	        if (v("accentLight")) theme.accentLight = v("accentLight");
+	        if (v("cursorDark")) theme.cursorDark = v("cursorDark");
+	        if (v("cursorLight")) theme.cursorLight = v("cursorLight");
+	        if (v("linkModHoverDark")) theme.linkModHoverDark = v("linkModHoverDark");
+	        if (v("linkModHoverLight")) theme.linkModHoverLight = v("linkModHoverLight");
+	        if (Object.keys(theme).length) overrides.theme = theme;
 
         const editor = {};
         if (v("lineWrapping") === "true") editor.lineWrapping = true;
@@ -1282,55 +1556,71 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
           if (val === "true") security[key] = true;
           if (val === "false") security[key] = false;
         }
-        if (Object.keys(security).length) overrides.security = security;
+	        if (Object.keys(security).length) overrides.security = security;
 
-        return overrides;
-      }
+	        const keybindings = {};
+	        for (const actionId of KB_ACTIONS) {
+	          const disable = el("kb_disable_" + actionId).checked;
+	          if (disable) {
+	            keybindings[actionId] = [];
+	            continue;
+	          }
+	          const keys = parseKeys(v("kb_" + actionId));
+	          if (keys.length > 0) keybindings[actionId] = keys;
+	        }
+	        if (Object.keys(keybindings).length) overrides.keybindings = keybindings;
 
-      function applyOverrides(o) {
-        const theme = (o && o.theme) || {};
-        setV("accentDark", theme.accentDark);
-        setV("accentLight", theme.accentLight);
-        setV("cursorDark", theme.cursorDark);
-        setV("cursorLight", theme.cursorLight);
+	        return overrides;
+	      }
 
-        setTri("lineWrapping", o && o.editor && o.editor.lineWrapping);
-        setV("syntaxVisibility", (o && o.preview && o.preview.syntaxVisibility) || "");
-        setTri("previewOnHover", o && o.links && o.links.previewOnHover);
-
-        setTri("allowExternalImages", o && o.security && o.security.allowExternalImages);
-        setTri("allowHtmlEmbeds", o && o.security && o.security.allowHtmlEmbeds);
-        setTri("allowIframes", o && o.security && o.security.allowIframes);
-      }
+	      function applyKeybindingsOverrides(o) {
+	        const kb = (o && o.keybindings) || {};
+	        for (const actionId of KB_ACTIONS) {
+	          const keys = kb[actionId];
+	          if (Array.isArray(keys) && keys.length === 0) {
+	            el("kb_disable_" + actionId).checked = true;
+	            setV("kb_" + actionId, "");
+	          } else {
+	            el("kb_disable_" + actionId).checked = false;
+	            setV("kb_" + actionId, Array.isArray(keys) ? keys.join(", ") : "");
+	          }
+	        }
+	      }
 
       window.addEventListener("message", (ev) => {
         const msg = ev.data;
         if (!msg || typeof msg.type !== "string") return;
-        if (msg.type === "SETTINGS_UI_INIT") {
+	        if (msg.type === "SETTINGS_UI_INIT") {
           filePath.textContent = msg.filePath || "(unknown)";
           const eff = msg.effective || {};
           const s = eff.settings || {};
           const t = eff.theme || {};
 
-          // Fill with current effective values (includes defaults and VS Code settings)
-          setV("accentDark", t.accentDark);
-          setV("accentLight", t.accentLight);
-          setV("cursorDark", t.cursorDark);
-          setV("cursorLight", t.cursorLight);
-          syncColorControl("accentDark");
-          syncColorControl("accentLight");
-          syncColorControl("cursorDark");
-          syncColorControl("cursorLight");
+	          // Fill with current effective values (includes defaults and VS Code settings)
+	          setV("accentDark", t.accentDark);
+	          setV("accentLight", t.accentLight);
+	          setV("cursorDark", t.cursorDark);
+	          setV("cursorLight", t.cursorLight);
+	          setV("linkModHoverDark", t.linkModHoverDark);
+	          setV("linkModHoverLight", t.linkModHoverLight);
+	          syncColorControl("accentDark");
+	          syncColorControl("accentLight");
+	          syncColorControl("cursorDark");
+	          syncColorControl("cursorLight");
+	          syncColorControl("linkModHoverDark");
+	          syncColorControl("linkModHoverLight");
 
           setTri("lineWrapping", s.editor && s.editor.lineWrapping);
           setV("syntaxVisibility", s.syntaxVisibility || "");
           setTri("previewOnHover", s.previewOnHover);
-          setTri("allowExternalImages", s.security && s.security.allowExternalImages);
-          setTri("allowHtmlEmbeds", s.security && s.security.allowHtmlEmbeds);
-          setTri("allowIframes", s.security && s.security.allowIframes);
+	          setTri("allowExternalImages", s.security && s.security.allowExternalImages);
+	          setTri("allowHtmlEmbeds", s.security && s.security.allowHtmlEmbeds);
+	          setTri("allowIframes", s.security && s.security.allowIframes);
 
-          setStatus("");
-        }
+	          // Fill from overrides (not effective), so "empty = inherit default" behavior is clear.
+	          applyKeybindingsOverrides(msg.overrides || {});
+	          setStatus("");
+	        }
         if (msg.type === "SAVE_OK") {
           setStatus("Saved.");
         }
@@ -1347,15 +1637,18 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
         vscode.postMessage({ type: "SETTINGS_UI_READY" });
       });
 
-      bindColorControl("accentDark");
-      bindColorControl("accentLight");
-      bindColorControl("cursorDark");
-      bindColorControl("cursorLight");
+	      bindColorControl("accentDark");
+	      bindColorControl("accentLight");
+	      bindColorControl("cursorDark");
+	      bindColorControl("cursorLight");
+	      bindColorControl("linkModHoverDark");
+	      bindColorControl("linkModHoverLight");
+	      attachKeyCapture();
 
-      vscode.postMessage({ type: "SETTINGS_UI_READY" });
-    </script>
-  </body>
-</html>`;
+	      vscode.postMessage({ type: "SETTINGS_UI_READY" });
+	    </script>
+	  </body>
+	</html>`;
   }
 
   private getNonce(): string {

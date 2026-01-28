@@ -4,6 +4,24 @@
 
 ## [Unreleased]
 
+## [0.0.10] - 2026-01-28
+### Added
+- Quench Settings から Webview 内ショートカット（CodeMirror keymap）を編集・保存できる機能を追加。
+- Keybindings入力欄で、実キー入力（Cmd/Ctrl/Shift/Alt + 任意キー）からCodeMirror形式（例: `Mod-l`）を自動入力できるように改善。
+- Quench 側に Markdown 整形ショートカットを追加（`Cmd+1..6` 見出し、`Cmd+'` 箇条書き、`Cmd+L` / `Shift+Cmd+'` チェックボックス）。
+- Quench 側に複数選択ショートカットを追加（`Cmd+D` 次一致、`Shift+Cmd+L` 全一致）。
+
+### Fixed
+- Quench Settings の Keybindings が全Quenchエディタへ反映されない問題を修正（`SETTINGS_UPDATED` で動的にkeymapを差し替え）。
+
+## [0.0.9] - 2026-01-28
+### Fixed
+- テーブル表示の実装変更により Webview が起動できない場合がある問題を修正（CodeMirrorの制約に合わせて `block` デコレーションを排除）。
+- Ctrl/⌘+Hover のリンク強調（青＋下線）が環境によって効かない問題を修正（プレーンURL/パスも含めてホバー中の範囲を明示的に装飾）。
+
+### Added
+- Ctrl/⌘+Hover のリンク強調色を、Quench Settings（Global Theme Override）から設定可能に追加（dark/light）。
+
 ## [0.0.8] - 2026-01-28
 ### Changed
 - Live Preview のGFMテーブル表示を「行装飾」から「HTMLテーブル描画（ブロックウィジェット）」に変更し、一般的な表に近い見た目に改善。

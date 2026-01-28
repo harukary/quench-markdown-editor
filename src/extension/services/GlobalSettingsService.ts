@@ -2,11 +2,14 @@ import * as vscode from "vscode";
 import { QuenchSettings } from "../../shared/protocol";
 
 export type QuenchGlobalOverrides = {
+  keybindings?: Record<string, string[]>;
   theme?: {
     accentDark?: string;
     accentLight?: string;
     cursorDark?: string;
     cursorLight?: string;
+    linkModHoverDark?: string;
+    linkModHoverLight?: string;
   };
   editor?: {
     lineWrapping?: boolean;
@@ -100,6 +103,10 @@ function isString(value: unknown): value is string {
   return typeof value === "string";
 }
 
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((v) => typeof v === "string");
+}
+
 function validateGlobalSettingsFile(value: unknown): GlobalSettingsFile {
   if (!isRecord(value)) throw new Error("Invalid global settings JSON (not an object).");
   if (value.version !== 1) throw new Error("Invalid global settings JSON (unsupported version).");
@@ -108,6 +115,16 @@ function validateGlobalSettingsFile(value: unknown): GlobalSettingsFile {
 
   const overrides: QuenchGlobalOverrides = {};
 
+  if (isRecord(overridesRaw.keybindings)) {
+    const kbRaw = overridesRaw.keybindings;
+    const keybindings: Record<string, string[]> = {};
+    for (const [actionId, keys] of Object.entries(kbRaw)) {
+      if (!isStringArray(keys)) throw new Error(`Invalid global settings JSON (keybindings.${actionId} must be string[]).`);
+      keybindings[actionId] = keys;
+    }
+    overrides.keybindings = keybindings;
+  }
+
   if (isRecord(overridesRaw.theme)) {
     const t = overridesRaw.theme;
     const theme: QuenchGlobalOverrides["theme"] = {};
@@ -115,6 +132,8 @@ function validateGlobalSettingsFile(value: unknown): GlobalSettingsFile {
     if (isString(t.accentLight)) theme.accentLight = t.accentLight;
     if (isString(t.cursorDark)) theme.cursorDark = t.cursorDark;
     if (isString(t.cursorLight)) theme.cursorLight = t.cursorLight;
+    if (isString(t.linkModHoverDark)) theme.linkModHoverDark = t.linkModHoverDark;
+    if (isString(t.linkModHoverLight)) theme.linkModHoverLight = t.linkModHoverLight;
     if (Object.keys(theme).length > 0) overrides.theme = theme;
   }
 
@@ -152,4 +171,3 @@ function validateGlobalSettingsFile(value: unknown): GlobalSettingsFile {
 
   return { version: 1, overrides };
 }
-

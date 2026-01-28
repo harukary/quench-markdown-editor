@@ -1,12 +1,13 @@
 // VSCode webview API
 declare function acquireVsCodeApi(): any;
 
-import { EditorState, StateEffect, Text } from "@codemirror/state";
-import { Decoration, EditorView, ViewPlugin, ViewUpdate, WidgetType } from "@codemirror/view";
+import { EditorSelection, EditorState, StateEffect, StateField, Text } from "@codemirror/state";
+import { Decoration, DecorationSet, EditorView, ViewPlugin, ViewUpdate, WidgetType } from "@codemirror/view";
 import { Compartment } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { defaultHighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
+import { keymap } from "@codemirror/view";
 import {
   assertExtensionToWebviewMessage,
   ExtensionToWebviewMessage,
@@ -64,6 +65,56 @@ const pendingResourceRequestIds = new Map<string, string>(); // requestId -> cac
 
 const forceRedrawEffect = StateEffect.define<void>();
 const lineWrappingCompartment = new Compartment();
+const keybindingsCompartment = new Compartment();
+
+type QuenchKeybindings = Record<string, string[]>;
+
+const DEFAULT_KEYBINDINGS: QuenchKeybindings = {
+  // Markdown shortcuts (user preference aligned)
+  toggleHeading1: ["Mod-1"],
+  toggleHeading2: ["Mod-2"],
+  toggleHeading3: ["Mod-3"],
+  toggleHeading4: ["Mod-4"],
+  toggleHeading5: ["Mod-5"],
+  toggleHeading6: ["Mod-6"],
+  toggleBullets: ["Mod-'"],
+  toggleCheckboxes: ["Mod-l", "Shift-Mod-'"],
+
+  // Multi-cursor selection
+  selectNextOccurrence: ["Mod-d"],
+  selectAllOccurrences: ["Shift-Mod-l"],
+
+  // Cursor movement (aligned with user's VS Code overrides)
+  moveWordLeft: ["Mod-ArrowLeft"],
+  moveWordLeftSelect: ["Shift-Mod-ArrowLeft"],
+  moveWordRight: ["Mod-ArrowRight"],
+  moveWordRightSelect: ["Shift-Mod-ArrowRight"],
+  moveLineStart: ["Alt-ArrowLeft"],
+  moveLineStartSelect: ["Shift-Alt-ArrowLeft"],
+  moveLineEnd: ["Alt-ArrowRight"],
+  moveLineEndSelect: ["Shift-Alt-ArrowRight"]
+};
+
+let keybindingHandlers: Record<string, (view: EditorView) => boolean> | null = null;
+
+const setModifierHoverLinkEffect = StateEffect.define<{ from: number; to: number } | null>();
+const modifierHoverLinkField = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update: (value, tr) => {
+    let next = value.map(tr.changes);
+    for (const e of tr.effects) {
+      if (e.is(setModifierHoverLinkEffect)) {
+        const payload = e.value;
+        if (!payload) return Decoration.none;
+        const from = Math.max(0, Math.min(tr.state.doc.length, payload.from));
+        const to = Math.max(from, Math.min(tr.state.doc.length, payload.to));
+        return Decoration.set([Decoration.mark({ class: "quench-mod-hover" }).range(from, to)]);
+      }
+    }
+    return next;
+  },
+  provide: (f) => EditorView.decorations.from(f)
+});
 
 type TableAlign = "left" | "center" | "right";
 
@@ -159,7 +210,11 @@ function parseGfmTable(doc: Text, range: ParsedTableRange): ParsedGfmTable | nul
 }
 
 class TableWidget extends WidgetType {
-  constructor(private readonly table: ParsedGfmTable) {
+  constructor(
+    private readonly view: EditorView,
+    private readonly tableFrom: number,
+    private readonly table: ParsedGfmTable
+  ) {
     super();
   }
   eq(other: TableWidget) {
@@ -168,6 +223,20 @@ class TableWidget extends WidgetType {
   toDOM() {
     const wrap = document.createElement("div");
     wrap.className = "md-table-widget";
+    wrap.addEventListener("click", (e) => {
+      // Switch to "edit mode": place the caret inside the table so decorations stop hiding the raw Markdown.
+      e.preventDefault();
+      e.stopPropagation();
+      try {
+        this.view.focus();
+        this.view.dispatch({
+          selection: EditorSelection.single(Math.min(this.view.state.doc.length, this.tableFrom + 1)),
+          scrollIntoView: true
+        });
+      } catch (err) {
+        console.error("[Quench] Failed to enter table edit mode", err);
+      }
+    });
 
     const tableEl = document.createElement("table");
     tableEl.className = "md-table";
@@ -237,16 +306,323 @@ function applySettings(next: QuenchSettings) {
   view.dispatch({
     effects: lineWrappingCompartment.reconfigure(enableWrap ? EditorView.lineWrapping : [])
   });
+  if (!keybindingHandlers) throw new Error("Keybinding handlers not initialized");
+  view.dispatch({
+    effects: keybindingsCompartment.reconfigure(buildKeymapExtension(next.keybindings, keybindingHandlers))
+  });
   view.dispatch({ effects: forceRedrawEffect.of(undefined) });
 }
 
+function buildKeymapExtension(
+  keybindings: QuenchSettings["keybindings"] | undefined,
+  handlers: Record<string, (view: EditorView) => boolean>
+) {
+  const items: { key: string; run: (view: EditorView) => boolean; preventDefault: boolean }[] = [];
+  for (const [actionId, run] of Object.entries(handlers)) {
+    const override = keybindings?.[actionId];
+    const keys = override !== undefined ? override : DEFAULT_KEYBINDINGS[actionId] ?? [];
+    if (keys.length === 0) continue; // disabled
+    for (const k of keys) {
+      const key = (k ?? "").trim();
+      if (!key) continue;
+      items.push({ key, run, preventDefault: true });
+    }
+  }
+  return keymap.of(items);
+}
+
 function initEditor(text: string) {
+  const scanForwardToWord = (docText: string, pos: number): number | null => {
+    for (let i = Math.max(0, pos); i < docText.length; i++) {
+      if (/\w/.test(docText[i] ?? "")) return i;
+    }
+    return null;
+  };
+
+  const scanBackwardToWord = (docText: string, pos: number): number | null => {
+    for (let i = Math.min(docText.length - 1, pos); i >= 0; i--) {
+      if (/\w/.test(docText[i] ?? "")) return i;
+    }
+    return null;
+  };
+
+  const moveWord = (view: EditorView, dir: "left" | "right", select: boolean): boolean => {
+    const docText = view.state.doc.toString();
+    const ranges = view.state.selection.ranges.map((r) => {
+      const head = r.head;
+      let nextHead = head;
+      if (dir === "right") {
+        const w = view.state.wordAt(head);
+        if (w && head < w.to) {
+          nextHead = w.to;
+        } else {
+          const start = scanForwardToWord(docText, head + 1);
+          if (start == null) nextHead = head;
+          else {
+            const w2 = view.state.wordAt(start);
+            nextHead = w2 ? w2.to : start;
+          }
+        }
+      } else {
+        const w = view.state.wordAt(head);
+        if (w && head > w.from) {
+          nextHead = w.from;
+        } else {
+          const start = scanBackwardToWord(docText, head - 1);
+          if (start == null) nextHead = head;
+          else {
+            const w2 = view.state.wordAt(start);
+            nextHead = w2 ? w2.from : start;
+          }
+        }
+      }
+
+      if (!select) return EditorSelection.cursor(nextHead);
+      return EditorSelection.range(r.anchor, nextHead);
+    });
+    view.dispatch({ selection: EditorSelection.create(ranges, view.state.selection.mainIndex), scrollIntoView: true });
+    return true;
+  };
+
+  const moveLineEdge = (view: EditorView, edge: "start" | "end", select: boolean): boolean => {
+    const ranges = view.state.selection.ranges.map((r) => {
+      const line = view.state.doc.lineAt(r.head);
+      const nextHead = edge === "start" ? line.from : line.to;
+      if (!select) return EditorSelection.cursor(nextHead);
+      return EditorSelection.range(r.anchor, nextHead);
+    });
+    view.dispatch({ selection: EditorSelection.create(ranges, view.state.selection.mainIndex), scrollIntoView: true });
+    return true;
+  };
+
+  const selectWordAtCursor = (view: EditorView): boolean => {
+    const sel = view.state.selection.main;
+    if (sel.from !== sel.to) return false;
+    const word = view.state.wordAt(sel.from);
+    if (!word) return false;
+    view.dispatch({ selection: EditorSelection.single(word.from, word.to) });
+    return true;
+  };
+
+  const selectNextOccurrence = (view: EditorView): boolean => {
+    const sel = view.state.selection.main;
+    if (sel.from === sel.to) return selectWordAtCursor(view);
+    const query = view.state.sliceDoc(sel.from, sel.to);
+    if (!query) return false;
+
+    const docText = view.state.doc.toString();
+    const searchFrom = sel.to;
+    let idx = docText.indexOf(query, searchFrom);
+    if (idx < 0) idx = docText.indexOf(query, 0);
+    if (idx < 0) return false;
+
+    const from = idx;
+    const to = idx + query.length;
+    const ranges = view.state.selection.ranges.map((r) => EditorSelection.range(r.from, r.to));
+    ranges.push(EditorSelection.range(from, to));
+    view.dispatch({
+      selection: EditorSelection.create(ranges, ranges.length - 1),
+      scrollIntoView: true
+    });
+    return true;
+  };
+
+  const selectAllOccurrences = (view: EditorView): boolean => {
+    const sel = view.state.selection.main;
+    if (sel.from === sel.to) {
+      const ok = selectWordAtCursor(view);
+      if (!ok) return false;
+      return selectAllOccurrences(view);
+    }
+    const query = view.state.sliceDoc(view.state.selection.main.from, view.state.selection.main.to);
+    if (!query) return false;
+
+    const docText = view.state.doc.toString();
+    const ranges: { from: number; to: number }[] = [];
+    let idx = 0;
+    while (idx <= docText.length) {
+      const next = docText.indexOf(query, idx);
+      if (next < 0) break;
+      ranges.push({ from: next, to: next + query.length });
+      idx = next + query.length;
+    }
+    if (ranges.length === 0) return false;
+
+    let mainIndex = ranges.findIndex((r) => r.from === sel.from && r.to === sel.to);
+    if (mainIndex < 0) mainIndex = 0;
+    view.dispatch({
+      selection: EditorSelection.create(
+        ranges.map((r) => EditorSelection.range(r.from, r.to)),
+        mainIndex
+      ),
+      scrollIntoView: true
+    });
+    return true;
+  };
+
+  const toggleCheckboxes = (view: EditorView): boolean => {
+    const doc = view.state.doc;
+    const targetLineNos = new Set<number>();
+    for (const r of view.state.selection.ranges) {
+      const fromLine = doc.lineAt(r.from).number;
+      const toLine = doc.lineAt(r.to).number;
+      for (let ln = fromLine; ln <= toLine; ln++) targetLineNos.add(ln);
+    }
+    if (targetLineNos.size === 0) return false;
+
+    const changes: { from: number; to: number; insert: string }[] = [];
+    const sortedLineNos = [...targetLineNos].sort((a, b) => b - a); // apply bottom-up
+    for (const ln of sortedLineNos) {
+      const line = doc.line(ln);
+      const text = line.text;
+      const m = /^(\s*)([-*+])(\s+)(\[(?: |x|X)\])(\s+)/.exec(text);
+      if (m) {
+        // Remove the checkbox marker to revert to a normal bullet.
+        const indent = m[1] ?? "";
+        const bullet = m[2] ?? "-";
+        const spacesAfterBullet = m[3] ?? " ";
+        const trailing = text.slice((m[0] ?? "").length);
+        const next = `${indent}${bullet}${spacesAfterBullet}${trailing}`;
+        changes.push({ from: line.from, to: line.to, insert: next });
+        continue;
+      }
+
+      const b = /^(\s*)([-*+])(\s+)(.*)$/.exec(text);
+      if (b) {
+        const indent = b[1] ?? "";
+        const bullet = b[2] ?? "-";
+        const spacesAfterBullet = b[3] ?? " ";
+        const rest = b[4] ?? "";
+        const next = `${indent}${bullet}${spacesAfterBullet}[ ] ${rest}`;
+        changes.push({ from: line.from, to: line.to, insert: next });
+        continue;
+      }
+
+      // Not a list item: convert to a checkbox list item (Obsidian-like).
+      const lead = /^(\s*)(.*)$/.exec(text);
+      const indent = lead?.[1] ?? "";
+      const rest = lead?.[2] ?? text;
+      const next = `${indent}- [ ] ${rest}`;
+      changes.push({ from: line.from, to: line.to, insert: next });
+    }
+
+    if (changes.length === 0) return false;
+    view.dispatch({ changes });
+    return true;
+  };
+
+  const toggleBullets = (view: EditorView): boolean => {
+    const doc = view.state.doc;
+    const targetLineNos = new Set<number>();
+    for (const r of view.state.selection.ranges) {
+      const fromLine = doc.lineAt(r.from).number;
+      const toLine = doc.lineAt(r.to).number;
+      for (let ln = fromLine; ln <= toLine; ln++) targetLineNos.add(ln);
+    }
+    if (targetLineNos.size === 0) return false;
+
+    const changes: { from: number; to: number; insert: string }[] = [];
+    const sortedLineNos = [...targetLineNos].sort((a, b) => b - a); // apply bottom-up
+    for (const ln of sortedLineNos) {
+      const line = doc.line(ln);
+      const text = line.text;
+      const m = /^(\s*)([-*+])(\s+)(?!\[[ xX]\])(.+)?$/.exec(text);
+      if (m) {
+        // Remove the bullet marker (keep the content).
+        const indent = m[1] ?? "";
+        const rest = m[4] ?? "";
+        changes.push({ from: line.from, to: line.to, insert: `${indent}${rest}` });
+        continue;
+      }
+
+      // Do not touch existing task list items here (handled by toggleCheckboxes).
+      const task = /^(\s*)([-*+])(\s+)\[(?: |x|X)\](\s+)(.*)$/.exec(text);
+      if (task) continue;
+
+      const lead = /^(\s*)(.*)$/.exec(text);
+      const indent = lead?.[1] ?? "";
+      const rest = (lead?.[2] ?? text).trimStart();
+      changes.push({ from: line.from, to: line.to, insert: `${indent}- ${rest}` });
+    }
+
+    if (changes.length === 0) return false;
+    view.dispatch({ changes });
+    return true;
+  };
+
+  const toggleHeadingLevel = (view: EditorView, level: 1 | 2 | 3 | 4 | 5 | 6): boolean => {
+    const doc = view.state.doc;
+    const targetLineNos = new Set<number>();
+    for (const r of view.state.selection.ranges) {
+      const fromLine = doc.lineAt(r.from).number;
+      const toLine = doc.lineAt(r.to).number;
+      for (let ln = fromLine; ln <= toLine; ln++) targetLineNos.add(ln);
+    }
+    if (targetLineNos.size === 0) return false;
+
+    const changes: { from: number; to: number; insert: string }[] = [];
+    const sortedLineNos = [...targetLineNos].sort((a, b) => b - a); // apply bottom-up
+    for (const ln of sortedLineNos) {
+      const line = doc.line(ln);
+      const text = line.text;
+      const m = /^(\s*)(#{1,6})\s+(.*)$/.exec(text);
+      if (m) {
+        const indent = m[1] ?? "";
+        const hashes = m[2] ?? "";
+        const rest = m[3] ?? "";
+        const current = Math.min(6, Math.max(1, hashes.length));
+        if (current === level) {
+          changes.push({ from: line.from, to: line.to, insert: `${indent}${rest}` });
+        } else {
+          changes.push({ from: line.from, to: line.to, insert: `${indent}${"#".repeat(level)} ${rest}` });
+        }
+        continue;
+      }
+
+      const lead = /^(\s*)(.*)$/.exec(text);
+      const indent = lead?.[1] ?? "";
+      const rest = (lead?.[2] ?? text).trimStart();
+      changes.push({ from: line.from, to: line.to, insert: `${indent}${"#".repeat(level)} ${rest}` });
+    }
+
+    if (changes.length === 0) return false;
+    view.dispatch({ changes });
+    return true;
+  };
+
+  const handlers: Record<string, (view: EditorView) => boolean> = {
+    toggleHeading1: (v) => toggleHeadingLevel(v, 1),
+    toggleHeading2: (v) => toggleHeadingLevel(v, 2),
+    toggleHeading3: (v) => toggleHeadingLevel(v, 3),
+    toggleHeading4: (v) => toggleHeadingLevel(v, 4),
+    toggleHeading5: (v) => toggleHeadingLevel(v, 5),
+    toggleHeading6: (v) => toggleHeadingLevel(v, 6),
+    toggleBullets: (v) => toggleBullets(v),
+    toggleCheckboxes: (v) => toggleCheckboxes(v),
+    selectNextOccurrence: (v) => selectNextOccurrence(v),
+    selectAllOccurrences: (v) => selectAllOccurrences(v),
+    moveWordLeft: (v) => moveWord(v, "left", false),
+    moveWordLeftSelect: (v) => moveWord(v, "left", true),
+    moveWordRight: (v) => moveWord(v, "right", false),
+    moveWordRightSelect: (v) => moveWord(v, "right", true),
+    moveLineStart: (v) => moveLineEdge(v, "start", false),
+    moveLineStartSelect: (v) => moveLineEdge(v, "start", true),
+    moveLineEnd: (v) => moveLineEdge(v, "end", false),
+    moveLineEndSelect: (v) => moveLineEdge(v, "end", true)
+  };
+
+  // Store handlers for later reconfigure (SETTINGS_UPDATED).
+  keybindingHandlers = handlers;
+
   const state = EditorState.create({
     doc: text,
     extensions: [
+      EditorState.allowMultipleSelections.of(true),
       markdown({ codeLanguages: languages }),
       syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
       lineWrappingCompartment.of(settings?.editor?.lineWrapping ? EditorView.lineWrapping : []),
+      modifierHoverLinkField,
+      keybindingsCompartment.of(buildKeymapExtension(settings?.keybindings, handlers)),
       livePreviewPlugin(),
       EditorView.updateListener.of((update) => {
         if (!update.docChanged) return;
@@ -604,7 +980,12 @@ function livePreviewPlugin() {
         const builder: any[] = [];
         const mode = settings?.syntaxVisibility ?? "smart";
         const sel = view.state.selection.main;
-        const selectionOverlaps = (from: number, to: number) => !(to <= sel.from || from >= sel.to);
+        const selectionOverlaps = (from: number, to: number) => {
+          // Treat a cursor (empty selection) as overlapping when it sits on the boundary.
+          // This is important for "click to edit" widgets that place the caret at the start of a hidden region.
+          if (sel.from === sel.to) return from <= sel.from && sel.from <= to;
+          return !(to <= sel.from || from >= sel.to);
+        };
         const clampToDoc = (pos: number) => Math.max(0, Math.min(view.state.doc.length, pos));
         const dimSyntax = (from: number, to: number) => {
           if (from >= to) return;
@@ -710,7 +1091,7 @@ function livePreviewPlugin() {
               }
             }
 
-            // GFMテーブル（置換はせず、行装飾のみ。改行をreplaceするとCMが落ちる）
+            // GFMテーブル（未編集中はMarkdownを隠してHTML表に置換）
             {
               // 引用内テーブルは現状未対応（行頭限定）
               const table = quotePrefix ? null : parseGfmTableRangeAtLine(view.state.doc, line.number);
@@ -718,25 +1099,36 @@ function livePreviewPlugin() {
                 const headerLine = view.state.doc.line(table.headerLineNo);
                 const endLine = view.state.doc.line(table.endLineNo);
                 const tableFrom = headerLine.from;
-                const tableTo = endLine.to;
+                const tableEndExclusive = Math.min(
+                  view.state.doc.length,
+                  endLine.to + (table.endLineNo < view.state.doc.lines ? 1 : 0)
+                );
 
-                if (!selectionOverlaps(tableFrom, Math.min(view.state.doc.length, tableTo + 1))) {
+                if (!selectionOverlaps(tableFrom, tableEndExclusive)) {
                   const parsed = parseGfmTable(view.state.doc, table);
                   if (parsed) {
-                    // Hide each line content (keep newlines) and render as a block widget.
+                    // Insert a widget and collapse table lines so we don't leave large vertical gaps.
+                    // NOTE: CodeMirror doesn't allow block decorations from ViewPlugins (boot error),
+                    // so we keep this widget non-block and rely on CSS for layout.
+                    builder.push(
+                      Decoration.widget({
+                        widget: new TableWidget(view, headerLine.from, parsed),
+                        side: 1
+                      }).range(tableFrom)
+                    );
+
                     for (let ln = table.headerLineNo; ln <= table.endLineNo; ln++) {
                       const l = view.state.doc.line(ln);
                       builder.push(Decoration.replace({}).range(l.from, l.to));
+                      builder.push(
+                        Decoration.line({
+                          class: ln === table.headerLineNo ? "md-table-host-line" : "md-table-hidden-line"
+                        }).range(l.from)
+                      );
                     }
-                    builder.push(
-                      Decoration.widget({
-                        widget: new TableWidget(parsed),
-                        side: 1
-                      }).range(headerLine.from)
-                    );
                   }
 
-                  pos = endLine.to + 1;
+                  pos = tableEndExclusive;
                   continue;
                 }
               }
@@ -1041,11 +1433,13 @@ let lastHoverHref: string | null = null;
 let lastHoverPoint: { x: number; y: number } | null = null;
 let pendingPreviewRequestId: string | null = null;
 let modifierHoverHandlersAttached = false;
+let setModifierMode: (active: boolean) => void = () => {};
+let lastModifierHoverRange: { from: number; to: number } | null = null;
 
 function attachDomHandlers(view: EditorView) {
   if (!modifierHoverHandlersAttached) {
     modifierHoverHandlersAttached = true;
-    const setModifierMode = (active: boolean) => {
+    setModifierMode = (active: boolean) => {
       document.body.classList.toggle("quench-mod", active);
     };
     window.addEventListener("keydown", (e) => {
@@ -1061,6 +1455,7 @@ function attachDomHandlers(view: EditorView) {
 
   view.dom.addEventListener("click", (e) => {
     if (!(e instanceof MouseEvent)) return;
+    setModifierMode(Boolean(e.ctrlKey || e.metaKey));
     if (!(e.ctrlKey || e.metaKey)) return;
     const pos = view.posAtCoords({ x: e.clientX, y: e.clientY });
     if (pos == null) return;
@@ -1072,6 +1467,35 @@ function attachDomHandlers(view: EditorView) {
 
   view.dom.addEventListener("mousemove", (e) => {
     if (!(e instanceof MouseEvent)) return;
+    // Some environments don't reliably deliver modifier-only keydown/keyup events to the webview.
+    // Use the mouse event state as the source of truth for Ctrl/⌘ modifier mode.
+    const modActive = Boolean(e.ctrlKey || e.metaKey);
+    setModifierMode(modActive);
+
+    // Ctrl/⌘+hover affordance: explicitly mark the hovered link range so styling doesn't rely on tokenizer classes.
+    {
+      const pos = view.posAtCoords({ x: e.clientX, y: e.clientY });
+      if (!modActive || pos == null) {
+        if (lastModifierHoverRange) {
+          lastModifierHoverRange = null;
+          view.dispatch({ effects: setModifierHoverLinkEffect.of(null) });
+        }
+      } else {
+        const link = findLinkAt(view, pos);
+        if (!link) {
+          if (lastModifierHoverRange) {
+            lastModifierHoverRange = null;
+            view.dispatch({ effects: setModifierHoverLinkEffect.of(null) });
+          }
+        } else {
+          const nextRange = { from: link.from, to: link.to };
+          if (!lastModifierHoverRange || lastModifierHoverRange.from !== nextRange.from || lastModifierHoverRange.to !== nextRange.to) {
+            lastModifierHoverRange = nextRange;
+            view.dispatch({ effects: setModifierHoverLinkEffect.of(nextRange) });
+          }
+        }
+      }
+    }
     if (!settings?.previewOnHover) return;
     const pos = view.posAtCoords({ x: e.clientX, y: e.clientY });
     if (pos == null) {
@@ -1099,6 +1523,11 @@ function attachDomHandlers(view: EditorView) {
   view.dom.addEventListener("mouseleave", () => {
     lastHoverHref = null;
     pendingPreviewRequestId = null;
+    if (lastModifierHoverRange) {
+      lastModifierHoverRange = null;
+      view.dispatch({ effects: setModifierHoverLinkEffect.of(null) });
+    }
+    setModifierMode(false);
     hidePreview();
   });
 
@@ -1203,6 +1632,10 @@ function attachDomHandlers(view: EditorView) {
 }
 
 function findLinkHrefAt(view: EditorView, pos: number): string | null {
+  return findLinkAt(view, pos)?.href ?? null;
+}
+
+function findLinkAt(view: EditorView, pos: number): { href: string; from: number; to: number } | null {
   const line = view.state.doc.lineAt(pos);
   const text = line.text;
   const offsetInLine = pos - line.from;
@@ -1236,7 +1669,15 @@ function findLinkHrefAt(view: EditorView, pos: number): string | null {
     return out.trim();
   };
 
-  const extractTokenAt = (): string | null => {
+  const rangeFromTrimmed = (raw: string, rawStart: number): { token: string; from: number; to: number } => {
+    const token = trimPunctuation(raw);
+    if (!token) return { token: "", from: rawStart, to: rawStart };
+    const idx = raw.indexOf(token);
+    if (idx < 0) return { token, from: rawStart, to: rawStart + raw.length };
+    return { token, from: rawStart + idx, to: rawStart + idx + token.length };
+  };
+
+  const extractTokenAt = (): { token: string; from: number; to: number } | null => {
     // Conservative tokenization for "plain path / url" on a single line.
     // We don't try to be smart across whitespace or nested punctuation.
     const isTokenChar = (ch: string) => /[A-Za-z0-9_./~:#@%+=-]/.test(ch);
@@ -1249,17 +1690,28 @@ function findLinkHrefAt(view: EditorView, pos: number): string | null {
     while (left - 1 >= 0 && isTokenChar(text[left - 1])) left--;
     while (right + 1 < text.length && isTokenChar(text[right + 1])) right++;
     const raw = text.slice(left, right + 1);
-    return trimPunctuation(raw);
+    const ranged = rangeFromTrimmed(raw, left);
+    if (!ranged.token) return null;
+    return { token: ranged.token, from: line.from + ranged.from, to: line.from + ranged.to };
   };
 
   for (const match of text.matchAll(/(!?)\[([^\]]*)\]\(([^)]+)\)/g)) {
     const start = match.index ?? -1;
     if (start < 0) continue;
-    const full = match[0];
+    const bang = match[1] === "!";
+    const label = match[2] ?? "";
+    const href = (match[3] ?? "").trim();
+    const full = match[0] ?? "";
     const end = start + full.length;
     if (!within(start, end)) continue;
-    const href = match[3] ?? "";
-    return href.trim();
+    const openBracket = start + (bang ? 1 : 0);
+    const labelFrom = openBracket + 1;
+    const labelTo = labelFrom + label.length;
+    const hrefFrom = labelTo + 2; // ](
+    const hrefTo = hrefFrom + (match[3] ?? "").length;
+    if (within(labelFrom, labelTo)) return { href, from: line.from + labelFrom, to: line.from + labelTo };
+    if (within(hrefFrom, hrefTo)) return { href, from: line.from + hrefFrom, to: line.from + hrefTo };
+    return { href, from: line.from + start, to: line.from + end };
   }
 
   // HTML image tag (GitHub-compatible sizing): <img src="..." ...>
@@ -1270,7 +1722,7 @@ function findLinkHrefAt(view: EditorView, pos: number): string | null {
     const end = start + raw.length;
     if (!within(start, end)) continue;
     const info = parseHtmlImgTag(raw);
-    if (info?.src) return info.src.trim();
+    if (info?.src) return { href: info.src.trim(), from: line.from + start, to: line.from + end };
   }
 
   // Angle-bracket autolinks: <https://...> / <mailto:...>
@@ -1280,7 +1732,10 @@ function findLinkHrefAt(view: EditorView, pos: number): string | null {
     const full = match[0];
     const end = start + full.length;
     if (!within(start, end)) continue;
-    return (match[1] ?? "").trim();
+    const inner = (match[1] ?? "").trim();
+    const innerStart = start + 1;
+    const innerEnd = innerStart + inner.length;
+    return { href: inner, from: line.from + innerStart, to: line.from + innerEnd };
   }
 
   // Bare URLs (GitHub-ish): https://...
@@ -1290,22 +1745,25 @@ function findLinkHrefAt(view: EditorView, pos: number): string | null {
     const full = match[0];
     const end = start + full.length;
     if (!within(start, end)) continue;
-    return trimPunctuation(full);
+    const ranged = rangeFromTrimmed(full, start);
+    if (!ranged.token) continue;
+    return { href: ranged.token, from: line.from + ranged.from, to: line.from + ranged.to };
   }
 
   // Plain paths (e.g. docs/file.md, ./file.md, ../img.png, #heading)
   const token = extractTokenAt();
   if (!token) return null;
-  if (token.startsWith("#")) return token; // in-document fragment
-  if (/^https?:\/\//i.test(token) || /^mailto:/i.test(token)) return token;
+  if (token.token.startsWith("#")) return { href: token.token, from: token.from, to: token.to }; // in-document fragment
+  if (/^https?:\/\//i.test(token.token) || /^mailto:/i.test(token.token)) return { href: token.token, from: token.from, to: token.to };
   // Require a strong "path-like" shape to avoid accidental opens.
   const looksPathLike =
-    token.startsWith("./") ||
-    token.startsWith("../") ||
-    token.startsWith("/") ||
-    token.includes("/") ||
-    /\.[A-Za-z0-9]{1,6}(?:#.+)?$/.test(token);
-  if (looksPathLike) return token;
+    token.token.startsWith("./") ||
+    token.token.startsWith("../") ||
+    token.token.startsWith("/") ||
+    token.token.includes("/") ||
+    /^[A-Za-z]:[\\/]/.test(token.token) ||
+    /\.[A-Za-z0-9]{1,6}(?:#.+)?$/.test(token.token);
+  if (looksPathLike) return { href: token.token, from: token.from, to: token.to };
 
   return null;
 }

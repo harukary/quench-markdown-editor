@@ -263,6 +263,15 @@ body.quench-mod .cm-content .tok-url:hover {
   text-decoration-color: color-mix(in srgb, var(--quench-link-mod-hover) 70%, transparent 30%);
   cursor: pointer;
 }
+
+/* Ctrl/⌘+hover highlight for plain URLs/paths (not relying on tokenizer classes) */
+.cm-content .quench-mod-hover {
+  color: var(--quench-link-mod-hover) !important;
+  text-decoration: underline !important;
+  text-decoration-color: color-mix(in srgb, var(--quench-link-mod-hover) 70%, transparent 30%) !important;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
 .cm-url {
   color: color-mix(in srgb, var(--quench-link) 55%, var(--quench-fg) 45%);
 }
@@ -370,7 +379,23 @@ body.quench-mod .cm-content .tok-url:hover {
 }
 
 .md-table-widget {
-  margin: 6px 0 10px;
+  display: block;
+  margin: 2px 0;
+}
+
+.cm-line.md-table-host-line {
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.cm-line.md-table-hidden-line {
+  height: 0 !important;
+  line-height: 0 !important;
+  font-size: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+  overflow: hidden !important;
 }
 
 .md-table {

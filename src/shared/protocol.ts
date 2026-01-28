@@ -4,6 +4,13 @@ export type QuenchSettings = {
   editor: {
     lineWrapping: boolean;
   };
+  /**
+   * Quench (webview) keybindings override.
+   * Keys are CodeMirror key names (e.g. "Mod-b", "Shift-Mod-l").
+   * - Omitted actionId: use Quench defaults
+   * - Empty array: disable the action binding
+   */
+  keybindings?: Record<string, string[]>;
   syntaxVisibility: "smart" | "always" | "minimal";
   previewOnHover: boolean;
   slugStyle: "github";
