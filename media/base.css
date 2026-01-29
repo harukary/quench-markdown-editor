@@ -1,7 +1,11 @@
 :root {
   /* Prefer VS Code's editor font over UI font for the editing surface */
   --quench-font: var(--vscode-editor-font-family, var(--vscode-font-family));
-  --quench-font-size: var(--vscode-font-size);
+  /* In some VS Code versions, editor font size is exposed separately to webviews. */
+  --quench-font-size: var(
+    --vscode-editor-font-size,
+    var(--vscode-editor-fontSize, var(--vscode-font-size))
+  );
   --quench-bg: var(--vscode-editor-background);
   --quench-fg: var(--vscode-editor-foreground);
   --quench-border: var(--vscode-editorWidget-border);
@@ -63,7 +67,7 @@ body {
   color: var(--quench-fg);
   font-family: var(--quench-font);
   font-size: var(--quench-font-size);
-  font-weight: normal;
+  font-weight: 400;
 }
 
 #root {
@@ -152,10 +156,22 @@ body {
   height: 100%;
 }
 
+/* CodeMirror may set `font-family: monospace` internally; force Quench's editor font. */
+#root .cm-editor,
+#root .cm-scroller,
+#root .cm-content {
+  font-family: var(--quench-font) !important;
+  font-size: var(--quench-font-size) !important;
+}
+
 /* Cursor visibility (VSCode theme) */
 .cm-content {
   caret-color: var(--quench-cursor);
-  font-weight: normal;
+  font-weight: 400 !important;
+  /* For variable fonts, explicitly pin weight to avoid "semi-bold-looking normal". */
+  font-variation-settings: "wght" 400 !important;
+  /* Allow synthetic bold/italic if the resolved font lacks those faces. */
+  font-synthesis: weight style;
 }
 .cm-cursor,
 .cm-dropCursor {
@@ -169,9 +185,10 @@ body {
   text-decoration: none !important;
   text-decoration-line: none !important;
 }
-.md-heading {
+#root .md-heading {
   color: var(--quench-accent);
-  font-weight: 650;
+  font-weight: 650 !important;
+  font-variation-settings: "wght" 650 !important;
   text-decoration: none !important;
 }
 /* CodeMirrorのmark装飾はネストされない/同一spanに複数classが付く場合があるため、強めに無効化する */
@@ -216,20 +233,40 @@ body {
   color: var(--quench-code-fg);
 }
 
-.md-bold {
-  font-weight: 700;
+/* Avoid whole-document bold/italic when the Markdown tokenizer leaves emphasis "open".
+   CodeMirror injects highlight styles using generated class names (e.g. "ͼ8") and can
+   use selectors that are as specific as `.cm-content .ͼ8`. Use `#root` to ensure our
+   neutralization wins, then re-apply weight/style only for Quench's own decorations. */
+#root .cm-content span {
+  font-weight: inherit !important;
+  font-style: inherit !important;
 }
 
-.md-italic {
-  font-style: italic;
+#root .cm-content .tok-strong,
+#root .cm-content .cm-strong,
+#root .cm-content .cm-strong-em {
+  font-weight: inherit !important;
+}
+#root .cm-content .tok-emphasis,
+#root .cm-content .cm-em {
+  font-style: inherit !important;
 }
 
-.md-bullet {
+#root .cm-content span.md-bold {
+  font-weight: 700 !important;
+  font-variation-settings: "wght" 700 !important;
+}
+
+#root .cm-content span.md-italic {
+  font-style: italic !important;
+}
+
+#root .md-bullet {
   display: inline-block;
   width: 1.25em;
   text-align: center;
   color: var(--quench-accent);
-  font-weight: 700;
+  font-weight: 700 !important;
 }
 
 .md-link {
@@ -369,6 +406,7 @@ body.quench-mod .cm-content .tok-url:hover {
 }
 .cm-line.md-table-header {
   font-weight: 650;
+  font-variation-settings: "wght" 650;
   background: color-mix(in srgb, var(--quench-bg) 90%, var(--quench-accent) 10%);
 }
 .cm-line.md-table-sep {
@@ -411,6 +449,7 @@ body.quench-mod .cm-content .tok-url:hover {
 .md-table thead th {
   background: color-mix(in srgb, var(--quench-bg) 88%, var(--quench-accent) 12%);
   font-weight: 650;
+  font-variation-settings: "wght" 650;
 }
 
 .md-table th,

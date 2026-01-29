@@ -984,6 +984,9 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
     const cacheBust = nonce;
     const scriptUri = `${webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, "media", "webview.js"))}?v=${cacheBust}`;
     const baseCssUri = `${webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, "media", "base.css"))}?v=${cacheBust}`;
+    const editorConfig = vscode.workspace.getConfiguration("editor");
+    const editorFontFamily = editorConfig.get<string>("fontFamily") ?? "";
+    const editorFontSize = editorConfig.get<number>("fontSize");
 
     return `<!doctype html>
 <html lang="ja">
@@ -1008,6 +1011,18 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
       (function () {
         const vscode = acquireVsCodeApi();
         window.__quench_vscode = vscode;
+
+        // Ensure the webview uses VS Code's *editor* font settings even when
+        // theme-provided CSS variables are missing or generic (e.g. "monospace").
+        const editorFontFamily = ${JSON.stringify(editorFontFamily)};
+        const editorFontSize = ${typeof editorFontSize === "number" ? editorFontSize : "null"};
+        if (typeof editorFontFamily === "string" && editorFontFamily.trim().length > 0) {
+          document.documentElement.style.setProperty("--quench-font", editorFontFamily);
+        }
+        if (typeof editorFontSize === "number" && Number.isFinite(editorFontSize)) {
+          document.documentElement.style.setProperty("--quench-font-size", String(editorFontSize) + "px");
+        }
+
         const queue = [];
         let handler = null;
 

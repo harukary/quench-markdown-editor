@@ -4,6 +4,15 @@
 
 ## [Unreleased]
 
+## [0.0.12] - 2026-01-29
+### Fixed
+- Live Preview で、強調の解釈/ハイライトの影響により本文全体が太字/斜体に見えることがある問題を修正（CodeMirror のトークン装飾を中和し、Quench 側の装飾に一本化）。
+- Webview 内でフォントが `monospace` に固定され、太字差が出にくい/見た目が崩れることがある問題を修正（VS Code の editor font 設定を反映し、CodeMirror 側の font-family 指定を上書き）。
+
+## [0.0.11] - 2026-01-28
+### Fixed
+- Webview 起動時に `Block decorations may not be specified via plugins` でクラッシュして Quench エディタが開けない場合がある問題を修正。
+
 ## [0.0.10] - 2026-01-28
 ### Added
 - Quench Settings から Webview 内ショートカット（CodeMirror keymap）を編集・保存できる機能を追加。

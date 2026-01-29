@@ -2,7 +2,7 @@
 declare function acquireVsCodeApi(): any;
 
 import { EditorSelection, EditorState, StateEffect, StateField, Text } from "@codemirror/state";
-import { Decoration, DecorationSet, EditorView, ViewPlugin, ViewUpdate, WidgetType } from "@codemirror/view";
+import { Decoration, DecorationSet, EditorView, WidgetType } from "@codemirror/view";
 import { Compartment } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { defaultHighlightStyle, syntaxHighlighting } from "@codemirror/language";
@@ -64,6 +64,15 @@ const resolvedImageCache = new Map<string, ResolvedImageEntry>();
 const pendingResourceRequestIds = new Map<string, string>(); // requestId -> cacheKey
 
 const forceRedrawEffect = StateEffect.define<void>();
+const forceRedrawField = StateField.define<number>({
+  create: () => 0,
+  update: (value, tr) => {
+    for (const e of tr.effects) {
+      if (e.is(forceRedrawEffect)) return value + 1;
+    }
+    return value;
+  }
+});
 const lineWrappingCompartment = new Compartment();
 const keybindingsCompartment = new Compartment();
 
@@ -618,6 +627,7 @@ function initEditor(text: string) {
     doc: text,
     extensions: [
       EditorState.allowMultipleSelections.of(true),
+      forceRedrawField,
       markdown({ codeLanguages: languages }),
       syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
       lineWrappingCompartment.of(settings?.editor?.lineWrapping ? EditorView.lineWrapping : []),
@@ -946,23 +956,8 @@ class TaskCheckboxWidget extends WidgetType {
 }
 
 function livePreviewPlugin() {
-  return ViewPlugin.fromClass(
-    class {
-      decorations: any;
-      constructor(private readonly view: EditorView) {
-        this.decorations = this.safeBuildDecorations(view);
-      }
-      update(update: ViewUpdate) {
-        if (
-          update.docChanged ||
-          update.viewportChanged ||
-          update.selectionSet ||
-          update.transactions.some((t) => t.effects.some((e) => e.is(forceRedrawEffect)))
-        ) {
-          this.decorations = this.safeBuildDecorations(update.view);
-        }
-      }
-
+  let didReportBootError = false;
+  const helper = new (class {
       safeBuildDecorations(view: EditorView) {
         try {
           const deco = this.buildDecorations(view);
@@ -971,8 +966,12 @@ function livePreviewPlugin() {
           const message = e instanceof Error ? e.message : String(e);
           const detail = e instanceof Error ? e.stack : undefined;
           showBanner(`Live preview error: ${message}`);
-          post({ type: "BOOT_ERROR", message, detail });
-          throw e;
+          if (!didReportBootError) {
+            didReportBootError = true;
+            post({ type: "BOOT_ERROR", message, detail });
+          }
+          // Keep the editor usable even when live preview fails.
+          return Decoration.none;
         }
       }
 
@@ -1354,11 +1353,14 @@ function livePreviewPlugin() {
 
         return Decoration.set(builder, true);
       }
-    },
-    {
-      decorations: (v) => v.decorations
-    }
-  );
+  })();
+
+  return EditorView.decorations.of((view) => {
+    // Ensure transactions with forceRedrawEffect cause this to be re-evaluated.
+    void view.state.field(forceRedrawField);
+    if (!settings) return Decoration.none;
+    return helper.safeBuildDecorations(view);
+  });
 }
 
 class BulletWidget extends WidgetType {
