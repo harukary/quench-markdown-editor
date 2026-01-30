@@ -181,6 +181,137 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
     );
   }
 
+  async configureGitDiffTextEditor(): Promise<void> {
+    const cfg = vscode.workspace.getConfiguration();
+    const key = "workbench.editorAssociations";
+    const current = cfg.get<unknown>(key);
+
+    if (current !== undefined && (typeof current !== "object" || current === null || Array.isArray(current))) {
+      vscode.window.showErrorMessage(
+        "Quench: workbench.editorAssociations の形式が想定外です。設定(JSON)を手動で確認してください。"
+      );
+      return;
+    }
+
+    const currentObj = (current as Record<string, string> | undefined) ?? {};
+    const next: Record<string, string> = { ...currentObj };
+
+    // Git の差分表示で使われる仮想リソース（git / gitlens スキーム）では常に Text Editor を使う。
+    // NOTE: `workbench.editorAssociations` のキーはスキームを含む glob（例: `git:/**/*.md`）として扱われる。
+    next["git:/**/*.md"] = "default";
+    next["gitlens:/**/*.md"] = "default";
+
+    await cfg.update(key, next, vscode.ConfigurationTarget.Global);
+    vscode.window.showInformationMessage("Quench: Git Diff の Markdown は Text Editor で開くよう設定しました。");
+  }
+
+  async openGitDiffInTextEditor(arg?: unknown): Promise<void> {
+    const uriFromArg = (() => {
+      if (!arg || typeof arg !== "object") return null;
+      if (arg instanceof vscode.Uri) return arg;
+      const maybe = arg as any;
+      return maybe.resourceUri instanceof vscode.Uri ? maybe.resourceUri : null;
+    })();
+
+    const uri = uriFromArg ?? vscode.window.activeTextEditor?.document.uri ?? this.lastActiveEditor?.document.uri ?? null;
+    if (!uri) {
+      vscode.window.showErrorMessage("Quench: 開いているファイルが見つかりません。");
+      return;
+    }
+
+    const gitExtension = vscode.extensions.getExtension("vscode.git");
+    if (!gitExtension) {
+      vscode.window.showErrorMessage("Quench: VS Code Git 拡張(vscode.git)が見つかりません。");
+      return;
+    }
+
+    const gitExports = gitExtension.exports as unknown;
+    if (!gitExports || typeof gitExports !== "object" || typeof (gitExports as any).getAPI !== "function") {
+      vscode.window.showErrorMessage("Quench: vscode.git API が取得できません（exports.getAPI が存在しません）。");
+      return;
+    }
+
+    const api = (gitExports as any).getAPI(1);
+    if (!api || typeof api !== "object") {
+      vscode.window.showErrorMessage("Quench: vscode.git API の取得に失敗しました。");
+      return;
+    }
+
+    let repo: any | undefined;
+    if (typeof api.getRepository === "function") {
+      repo = api.getRepository(uri);
+    }
+    if (!repo && Array.isArray((api as any).repositories)) {
+      const repos: any[] = (api as any).repositories;
+      repo = repos.find((r) => {
+        const rootUri = r?.rootUri;
+        if (!rootUri || typeof rootUri !== "object" || typeof rootUri.toString !== "function") return false;
+        return uri.toString().startsWith(rootUri.toString());
+      });
+    }
+    if (!repo) {
+      vscode.window.showErrorMessage("Quench: このファイルに対応するGitリポジトリが見つかりません。");
+      return;
+    }
+
+    if (typeof repo.toGitUri !== "function") {
+      vscode.window.showErrorMessage("Quench: リポジトリAPI(toGitUri)が見つかりません。");
+      return;
+    }
+
+    const left = repo.toGitUri(uri, "HEAD");
+    const right = uri;
+    const title = `Diff (Text): ${vscode.workspace.asRelativePath(uri)}`;
+    await vscode.commands.executeCommand("vscode.diff", left, right, title);
+  }
+
+  async openWithQuench(arg?: unknown): Promise<void> {
+    const uriFromArg = (() => {
+      if (!arg || typeof arg !== "object") return null;
+      if (arg instanceof vscode.Uri) return arg;
+      const maybe = arg as any;
+      return maybe.resourceUri instanceof vscode.Uri ? maybe.resourceUri : null;
+    })();
+
+    const uri = uriFromArg ?? vscode.window.activeTextEditor?.document.uri ?? null;
+    if (!uri) {
+      vscode.window.showErrorMessage("Quench: 開いているファイルが見つかりません。");
+      return;
+    }
+
+    if (uri.scheme !== "file") {
+      vscode.window.showErrorMessage(`Quench: このURIスキームでは開けません: ${uri.scheme}`);
+      return;
+    }
+    if (!uri.path.endsWith(".md")) {
+      vscode.window.showErrorMessage("Quench: Markdown (.md) ファイルのみ対象です。");
+      return;
+    }
+
+    const doc = vscode.window.activeTextEditor?.document;
+    if (doc && doc.uri.toString() === uri.toString() && doc.isDirty) {
+      vscode.window.showErrorMessage("Quench: 未保存の変更があります。保存してから Quench で開き直してください。");
+      return;
+    }
+
+    // "Reopen" behavior:
+    // Close the active text tab first (safe: we've already blocked dirty docs),
+    // then open with Quench so it replaces the editor instead of creating a duplicate tab.
+    const activeTab = vscode.window.tabGroups.activeTabGroup.activeTab;
+    const shouldCloseActiveTextTab =
+      activeTab?.input instanceof vscode.TabInputText && activeTab.input.uri.toString() === uri.toString();
+
+    if (shouldCloseActiveTextTab && activeTab) {
+      const closed = await vscode.window.tabGroups.close(activeTab, true);
+      if (!closed) {
+        vscode.window.showErrorMessage("Quench: タブを閉じられませんでした（キャンセルされた可能性があります）。");
+        return;
+      }
+    }
+
+    await vscode.commands.executeCommand("vscode.openWith", uri, QuenchEditorProvider.viewType);
+  }
+
   async rebuildWorkspaceIndex(): Promise<void> {
     await this.workspaceIndex.rebuild();
     vscode.window.showInformationMessage("Quench: Workspace index rebuilt.");

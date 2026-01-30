@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+## [0.0.13] - 2026-01-30
+### Added
+- Git差分表示（Diffビュー）で `.md` を Text Editor で扱うためのコマンド `Quench: Use Text Editor in Git Diff for Markdown` を追加（`workbench.editorAssociations` に `git:/**/*.md` / `gitlens:/**/*.md` を設定）。
+- `.md` を Text Editor 既定のまま、必要なときだけ Quench で開ける導線を追加（エディタタイトルのアイコンボタン / コマンド `Quench: Open in Quench`）。
+
+### Fixed
+- `Quench: Open in Quench` 実行時にタブの閉じ方によって `Tab close: Invalid tab not found!` が出る場合がある問題を修正。
+
+### Changed
+- `Quench: Open in Quench` は「追加で開く」ではなく「開き直し（置き換え）」になるよう挙動を変更（未保存の場合は安全のため中断）。
+
 ## [0.0.12] - 2026-01-29
 ### Fixed
 - Live Preview で、強調の解釈/ハイライトの影響により本文全体が太字/斜体に見えることがある問題を修正（CodeMirror のトークン装飾を中和し、Quench 側の装飾に一本化）。

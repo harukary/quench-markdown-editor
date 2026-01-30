@@ -6,7 +6,7 @@
   "sponsor": {
     "url": "https://buymeacoffee.com/harukary7518"
   },
-  "version": "0.0.12",
+  "version": "0.0.13",
   "publisher": "harukary7518",
   "license": "UNLICENSED",
   "keywords": [
@@ -27,6 +27,9 @@
   "activationEvents": [
     "onCustomEditor:quench.markdownEditor",
     "onCommand:quench.reloadCss",
+    "onCommand:quench.configureGitDiffTextEditor",
+    "onCommand:quench.openGitDiffInTextEditor",
+    "onCommand:quench.openWithQuench",
     "onCommand:quench.createThemeCss",
     "onCommand:quench.openSettings",
     "onCommand:quench.rebuildWorkspaceIndex",
@@ -53,6 +56,22 @@
       {
         "command": "quench.reloadCss",
         "title": "Quench: Reload CSS"
+      },
+      {
+        "command": "quench.configureGitDiffTextEditor",
+        "title": "Quench: Use Text Editor in Git Diff for Markdown"
+      },
+      {
+        "command": "quench.openGitDiffInTextEditor",
+        "title": "Quench: Open Git Diff (Text Editor)"
+      },
+      {
+        "command": "quench.openWithQuench",
+        "title": "Quench: Open in Quench",
+        "icon": {
+          "light": "resources/icon.png",
+          "dark": "resources/icon.png"
+        }
       },
       {
         "command": "quench.createThemeCss",
@@ -186,6 +205,21 @@
           "description": "Allow iframe embeds (only meaningful when allowHtmlEmbeds is enabled)."
         }
       }
+    },
+    "menus": {
+      "editor/title": [
+        {
+          "command": "quench.openWithQuench",
+          "group": "navigation",
+          "when": "resourceExtname == .md && resourceScheme == file && !inDiffEditor"
+        }
+      ],
+      "scm/resourceState/context": [
+        {
+          "command": "quench.openGitDiffInTextEditor",
+          "group": "navigation"
+        }
+      ]
     }
   },
   "scripts": {

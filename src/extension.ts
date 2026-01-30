@@ -18,6 +18,24 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
+    vscode.commands.registerCommand("quench.configureGitDiffTextEditor", async () => {
+      await provider.configureGitDiffTextEditor();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("quench.openGitDiffInTextEditor", async (arg) => {
+      await provider.openGitDiffInTextEditor(arg);
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("quench.openWithQuench", async (arg) => {
+      await provider.openWithQuench(arg);
+    })
+  );
+
+  context.subscriptions.push(
     vscode.commands.registerCommand("quench.createThemeCss", async () => {
       await provider.createThemeCss();
     })
