@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+## [0.0.14] - 2026-02-04
+### Fixed
+- Quench エディタ上で `Tab` / `Shift-Tab` によるインデント / アウトデントが効かない問題を修正。
+
+### Added
+- `Tab` / `Shift-Tab` の挙動を Quench Settings（Keybindings）から上書きできる項目（Indent / Outdent）を追加。
+
 ## [0.0.13] - 2026-01-30
 ### Added
 - Git差分表示（Diffビュー）で `.md` を Text Editor で扱うためのコマンド `Quench: Use Text Editor in Git Diff for Markdown` を追加（`workbench.editorAssociations` に `git:/**/*.md` / `gitlens:/**/*.md` を設定）。

@@ -8,6 +8,7 @@ import { markdown } from "@codemirror/lang-markdown";
 import { defaultHighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
 import { keymap } from "@codemirror/view";
+import { indentLess, indentMore } from "@codemirror/commands";
 import {
   assertExtensionToWebviewMessage,
   ExtensionToWebviewMessage,
@@ -79,6 +80,10 @@ const keybindingsCompartment = new Compartment();
 type QuenchKeybindings = Record<string, string[]>;
 
 const DEFAULT_KEYBINDINGS: QuenchKeybindings = {
+  // Indentation
+  indentMore: ["Tab"],
+  indentLess: ["Shift-Tab"],
+
   // Markdown shortcuts (user preference aligned)
   toggleHeading1: ["Mod-1"],
   toggleHeading2: ["Mod-2"],
@@ -600,6 +605,8 @@ function initEditor(text: string) {
   };
 
   const handlers: Record<string, (view: EditorView) => boolean> = {
+    indentMore: (v) => indentMore(v),
+    indentLess: (v) => indentLess(v),
     toggleHeading1: (v) => toggleHeadingLevel(v, 1),
     toggleHeading2: (v) => toggleHeadingLevel(v, 2),
     toggleHeading3: (v) => toggleHeadingLevel(v, 3),

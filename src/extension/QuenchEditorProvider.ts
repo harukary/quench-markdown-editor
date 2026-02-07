@@ -1334,6 +1334,20 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
         These keybindings apply only inside Quench (webview). Use CodeMirror key names (e.g. <code>Mod-b</code>, <code>Shift-Mod-l</code>).<br />
         Empty = inherit Quench defaults. Check "Disable" to remove a default binding.
       </div>
+      <label for="kb_indentMore">Indent</label>
+      <div class="colorRow">
+        <input class="colorText" id="kb_indentMore" type="text" placeholder="e.g. Tab" />
+        <label style="display:flex; align-items:center; gap:6px; font-size:12px;">
+          <input type="checkbox" id="kb_disable_indentMore" /> Disable
+        </label>
+      </div>
+      <label for="kb_indentLess">Outdent</label>
+      <div class="colorRow">
+        <input class="colorText" id="kb_indentLess" type="text" placeholder="e.g. Shift-Tab" />
+        <label style="display:flex; align-items:center; gap:6px; font-size:12px;">
+          <input type="checkbox" id="kb_disable_indentLess" /> Disable
+        </label>
+      </div>
       <label for="kb_toggleHeading1">Heading H1</label>
       <div class="colorRow">
         <input class="colorText" id="kb_toggleHeading1" type="text" placeholder="e.g. Mod-1" />
@@ -1549,6 +1563,8 @@ export class QuenchEditorProvider implements vscode.CustomTextEditorProvider {
 	      }
 
 	      const KB_ACTIONS = [
+	        "indentMore",
+	        "indentLess",
 	        "toggleHeading1",
 	        "toggleHeading2",
 	        "toggleHeading3",

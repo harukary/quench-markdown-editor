@@ -6,7 +6,7 @@
   "sponsor": {
     "url": "https://buymeacoffee.com/harukary7518"
   },
-  "version": "0.0.13",
+  "version": "0.0.14",
   "publisher": "harukary7518",
   "license": "UNLICENSED",
   "keywords": [
@@ -234,6 +234,7 @@
     "markdown-it": "^14.1.0"
   },
   "devDependencies": {
+    "@codemirror/commands": "^6.10.0",
     "@codemirror/lang-markdown": "^6.2.5",
     "@codemirror/language": "^6.12.1",
     "@codemirror/language-data": "^6.5.2",
