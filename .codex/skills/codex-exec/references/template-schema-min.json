@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Codex Exec Minimal Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["summary", "artifacts", "next_actions"],
+  "properties": {
+    "summary": {
+      "type": "string",
+      "description": "結果の要約"
+    },
+    "artifacts": {
+      "type": "array",
+      "description": "根拠や生成物",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "value"],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["file", "command", "note", "issue"]
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "next_actions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}
+

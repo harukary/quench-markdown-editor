@@ -82,13 +82,19 @@
 
 ## バックグラウンド実行メモ
 
-- 長時間かかる処理（例: CR ZIP 1000件超の展開、大容量PDF変換、全DOCXバッチ処理など）は `nohup ... &` でバックグラウンドに回し、標準出力をログにリダイレクトする。例:
-  - `nohup bash xxx.sh -f > dev/tmp/archive/extract_ran5_zips_103.log 2>&1 &`
+- 長時間かかる処理（例: CR ZIP 1000件超の展開、大容量PDF変換、全DOCXバッチ処理など）は、原則 `tmux` 上で実行して「セッションに残す」。
+- 普段のtmuxと干渉させたくない場合は、専用サーバ（例: `tmux -L codex ...`）を使う。
+  - 例（専用サーバ+専用設定）:
+    - `tmux -L codex -f ~/workspace/agents/skills/tmux/tmux.codex.conf new-session -d -s job -n run -c "$PWD" "bash -lc 'bash xxx.sh -f'"`
 - バックグラウンド実行が必要になる目安:
   - 推定実行時間が数分以上で、ターミナル占有が業務を阻害するケース
   - 入力ファイル数やサイズが非常に多い場合（数百件～）
   - ロングラン処理中に他作業を平行したい場合（ログを tail しながら状況監視）
-- 実行後は `tail -f <log>` や `ps -p <PID>` で進捗を確認し、完了したらログを保存しておく。
+- 実行後は `tmux capture-pane` / `tmux attach` で進捗を確認し、完了したらログを保存しておく。
+
+前提:
+
+- `tmux` が使えること（無い場合はインストールしてから進める）
 
 ## Git / コミット運用（重要）
 

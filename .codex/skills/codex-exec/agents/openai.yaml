@@ -1,0 +1,4 @@
+interface:
+  display_name: "Codex Exec"
+  short_description: "Split codex exec into small jobs for research and exploration"
+  default_prompt: "Use $codex-exec to split this task into small jobs and run them safely."
