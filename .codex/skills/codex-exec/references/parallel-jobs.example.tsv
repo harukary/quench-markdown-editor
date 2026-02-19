@@ -1,0 +1,3 @@
+# name	cwd	prompt_file	sandbox	output_schema	output_file
+research-daylingo	/Users/inoueryo/workspace/daylingo	/Users/inoueryo/workspace/.secret-required/prompt.txt	read-only	/Users/inoueryo/workspace/.secret-required/schema.json	/Users/inoueryo/workspace/.secret-required/results/daylingo.json
+research-leafy	/Users/inoueryo/workspace/leafy	/Users/inoueryo/workspace/.secret-required/prompt.txt	read-only	/Users/inoueryo/workspace/.secret-required/schema.json	/Users/inoueryo/workspace/.secret-required/results/leafy.json

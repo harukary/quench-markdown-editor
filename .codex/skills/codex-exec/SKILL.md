@@ -17,6 +17,7 @@ description: 非対話の `codex exec` を安全に運用し、調査・実装�
 3. 調査は `read-only`、編集は必要時のみ `workspace-write` にする。
 4. 長時間ジョブは `tmux` で回す。
 5. 探索と収束を分離する。収束判断はユーザーが行う。
+6. `codex exec` 呼び出し側のタイムアウトは **30分以上**（最低 `1800s`）にする。
 
 ## 実行フロー
 
@@ -82,6 +83,40 @@ tmux -L codex -f ~/workspace/agents/skills/tmux/tmux.codex.conf \
 tmux -L codex capture-pane -pt execjob:run | tail -n 80
 ```
 
+## 1ペインで並列実行 + 監視（推奨）
+
+`tmux` は1ペインだけ使い、その中で監視スクリプトを動かす。  
+各 `codex exec` の PID / 終了コード / ログサイズ / 末尾行を定期表示する。
+
+```bash
+bash agents/skills/codex-exec/scripts/parallel-exec.sh \
+  --jobs agents/skills/codex-exec/references/parallel-jobs.example.tsv \
+  --max-parallel 3 \
+  --poll-sec 10 \
+  --job-timeout-sec 3600
+```
+
+### `jobs.tsv` 形式（tab区切り）
+
+`name<TAB>cwd<TAB>prompt_file<TAB>sandbox(optional)<TAB>output_schema(optional)<TAB>output_file(optional)`
+
+- `sandbox` 省略時は `read-only`
+- `output_schema`/`output_file` は空欄可
+- 例は `references/parallel-jobs.example.tsv` を参照
+
+### 監視の見方
+
+- `state=running` で `log_bytes` が増えていれば進行中
+- `state=done` と `rc=0` で成功
+- `timed_out=1` はタイムアウト到達（TERM/KILL実施）
+- 最終結果は `summary.tsv`（ログディレクトリ配下）に保存
+
+## タイムアウト設定（重要）
+
+- `codex exec` を呼び出す親プロセス（CI / ラッパースクリプト / エージェント）のタイムアウトは、短くしすぎない。
+- 最低: `30分`（`1800s`）。推奨: `45〜60分`。
+- 短いタイムアウトだと「応答が返る前に打ち切り」になり、失敗判定を誤る。
+
 ## 失敗時の切り分け
 
 1. 出力が収束しない: プロンプトを短くし、目的を分割する。
@@ -96,4 +131,4 @@ tmux -L codex capture-pane -pt execjob:run | tail -n 80
 - `references/template-review.md`
 - `references/template-explore-qualitative.md`
 - `references/template-schema-min.json`
-
+- `references/parallel-jobs.example.tsv`

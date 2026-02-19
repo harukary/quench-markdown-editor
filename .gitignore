@@ -4,3 +4,4 @@ node_modules/
 .DS_Store
 media/webview.js
 media/webview.js.map
+.secret
